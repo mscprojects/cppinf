@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "files/safetensors_file.h"
+#include "test_temp_dir.h"
 
 using cppinf::files::SafetensorsFile;
 using cppinf::tensors::DType;
@@ -28,20 +29,11 @@ class SafetensorsFileTest : public ::testing::Test {
     }
 
     std::filesystem::path write_temp_file(std::span<const std::byte> file_bytes) {
-        const std::filesystem::path path =
-            std::filesystem::temp_directory_path() / "cppinf-safetensors-test.safetensors";
+        const std::filesystem::path path = temp_dir_.path() / "weights.safetensors";
         std::ofstream output(path, std::ios::binary);
         output.write(reinterpret_cast<const char*>(file_bytes.data()), static_cast<std::streamsize>(file_bytes.size()));
         output.close();
-        temp_file_path_ = path;
         return path;
-    }
-
-    void TearDown() override {
-        if (!temp_file_path_.empty()) {
-            std::error_code error_code;
-            std::filesystem::remove(temp_file_path_, error_code);
-        }
     }
 
   private:
@@ -51,7 +43,7 @@ class SafetensorsFileTest : public ::testing::Test {
         }
     }
 
-    std::filesystem::path temp_file_path_;
+    TestTempDir temp_dir_{"cppinf-safetensors-file-test"};
 };
 
 TEST_F(SafetensorsFileTest, GivenValidFileBytes_WhenLoading_ThenMetadataAndTensorInfoAreAvailable) {

@@ -9,29 +9,20 @@
 #include <gtest/gtest.h>
 
 #include "cli/cli_app.h"
+#include "test_temp_dir.h"
 
 using cppinf::cli::CliResult;
 using cppinf::cli::run;
 
 class CliAppTest : public ::testing::Test {
   protected:
-    void SetUp() override {
-        model_dir_ = std::filesystem::temp_directory_path() / "cppinf-cli-app-test";
-        std::filesystem::create_directories(model_dir_);
-    }
-
-    void TearDown() override {
-        std::error_code error_code;
-        std::filesystem::remove_all(model_dir_, error_code);
-    }
-
     void write_text_file(std::string_view file_name, std::string_view text) {
-        std::ofstream output(model_dir_ / file_name);
+        std::ofstream output(temp_dir_.path() / file_name);
         output << text;
     }
 
     void write_binary_file(std::string_view file_name, std::span<const std::byte> bytes) {
-        std::ofstream output(model_dir_ / file_name, std::ios::binary);
+        std::ofstream output(temp_dir_.path() / file_name, std::ios::binary);
         output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     }
 
@@ -65,7 +56,7 @@ class CliAppTest : public ::testing::Test {
     }
 
     const std::filesystem::path& model_dir() const {
-        return model_dir_;
+        return temp_dir_.path();
     }
 
   private:
@@ -88,7 +79,7 @@ class CliAppTest : public ::testing::Test {
         }
     }
 
-    std::filesystem::path model_dir_;
+    TestTempDir temp_dir_{"cppinf-cli-app-test"};
 };
 
 TEST_F(CliAppTest, GivenNoArguments_WhenRunning_ThenDefaultOutputIsReturned) {
