@@ -1,0 +1,218 @@
+#include "nn/causal_self_attention.h"
+
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include <fmt/format.h>
+
+#include "ops/matmul.h"
+#include "ops/nn_ops.h"
+#include "ops/tensor_ops.h"
+#include "tensors/dtype.h"
+#include "tensors/shape.h"
+#include "tensors/tensor_info.h"
+
+namespace cppinf::nn {
+namespace {
+
+tensors::TensorInfo make_result_info(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
+    return tensors::TensorInfo{
+        .name = std::string(name),
+        .dtype = dtype,
+        .shape = shape,
+        .byte_offset = 0,
+    };
+}
+
+std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
+    if (dim < 0) {
+        throw std::invalid_argument(fmt::format("{} must be non-negative.", field_name));
+    }
+
+    const std::size_t value = static_cast<std::size_t>(dim);
+    if (value == 0) {
+        throw std::invalid_argument(fmt::format("{} must be non-zero.", field_name));
+    }
+
+    return value;
+}
+
+void validate_supported_float_dtype(tensors::DType dtype, std::string_view op_name) {
+    switch (dtype) {
+    case tensors::DType::BF16:
+    case tensors::DType::F32:
+        return;
+    case tensors::DType::F16:
+    case tensors::DType::I32:
+    case tensors::DType::I64:
+    case tensors::DType::U8:
+        throw std::invalid_argument(fmt::format("{} currently supports only f32 and bf16 tensors.", op_name));
+    }
+
+    throw std::invalid_argument(fmt::format("{} received an unsupported dtype.", op_name));
+}
+
+tensors::TensorView maybe_cast_to_f32(const tensors::TensorView& input, std::optional<tensors::Tensor>& storage) {
+    if (input.tensor_info().dtype == tensors::DType::F32) {
+        return input;
+    }
+
+    storage.emplace(cppinf::ops::cast(input, tensors::DType::F32));
+    return storage->view();
+}
+
+float load_f32(std::span<const std::byte> bytes, std::size_t index) {
+    float value = 0.0f;
+    std::memcpy(&value, bytes.data() + index * sizeof(float), sizeof(float));
+    return value;
+}
+
+void store_f32(std::span<std::byte> bytes, std::size_t index, float value) {
+    std::memcpy(bytes.data() + index * sizeof(float), &value, sizeof(float));
+}
+
+tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, float scale,
+                                             std::size_t past_sequence_length) {
+    if (scores.tensor_info().dtype != tensors::DType::F32 || scores.tensor_info().shape.rank() != 2) {
+        throw std::invalid_argument("scale_and_causal_mask_scores requires a rank-2 f32 tensor.");
+    }
+
+    const auto& dims = scores.tensor_info().shape.dims();
+    const std::size_t query_sequence_length = checked_positive_dim_to_size(dims[0], "attention query sequence length");
+    const std::size_t key_sequence_length = checked_positive_dim_to_size(dims[1], "attention key sequence length");
+
+    tensors::Tensor masked_scores = tensors::Tensor::zeros(
+        make_result_info("causal_attention_scores", tensors::DType::F32, scores.tensor_info().shape));
+
+    for (std::size_t query_index = 0; query_index < query_sequence_length; ++query_index) {
+        const std::size_t last_allowed_key = past_sequence_length + query_index;
+        for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
+            const std::size_t flat_index = query_index * key_sequence_length + key_index;
+            const float value = key_index <= last_allowed_key
+                                    ? load_f32(scores.data(), flat_index) * scale
+                                    : -std::numeric_limits<float>::infinity();
+            store_f32(masked_scores.mutable_data(), flat_index, value);
+        }
+    }
+
+    return masked_scores;
+}
+
+void copy_head_output_to_result(const tensors::Tensor& head_output, std::size_t head_index, tensors::Tensor& result) {
+    const std::size_t byte_offset = head_index * head_output.byte_size();
+    std::memcpy(result.mutable_data().data() + byte_offset, head_output.data().data(), head_output.byte_size());
+}
+
+tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
+    return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
+                           std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
+}
+
+void validate_attention_inputs(const tensors::TensorView& query, const tensors::TensorView& key,
+                               const tensors::TensorView& value, std::size_t past_sequence_length) {
+    validate_supported_float_dtype(query.tensor_info().dtype, "causal_self_attention");
+    if (query.tensor_info().dtype != key.tensor_info().dtype || query.tensor_info().dtype != value.tensor_info().dtype) {
+        throw std::invalid_argument("causal_self_attention requires matching tensor dtypes.");
+    }
+    if (query.tensor_info().shape.rank() != 3 || key.tensor_info().shape.rank() != 3 ||
+        value.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("causal_self_attention requires rank-3 tensors.");
+    }
+
+    const auto& query_dims = query.tensor_info().shape.dims();
+    const auto& key_dims = key.tensor_info().shape.dims();
+    const auto& value_dims = value.tensor_info().shape.dims();
+
+    const std::size_t query_heads = checked_positive_dim_to_size(query_dims[0], "attention query heads");
+    const std::size_t key_heads = checked_positive_dim_to_size(key_dims[0], "attention key heads");
+    const std::size_t value_heads = checked_positive_dim_to_size(value_dims[0], "attention value heads");
+    if (query_heads != key_heads || query_heads != value_heads) {
+        throw std::invalid_argument("causal_self_attention requires matching head counts.");
+    }
+
+    const std::size_t query_sequence_length =
+        checked_positive_dim_to_size(query_dims[1], "attention query sequence length");
+    const std::size_t key_sequence_length = checked_positive_dim_to_size(key_dims[1], "attention key sequence length");
+    const std::size_t value_sequence_length =
+        checked_positive_dim_to_size(value_dims[1], "attention value sequence length");
+    if (key_sequence_length != value_sequence_length) {
+        throw std::invalid_argument("causal_self_attention requires matching key and value sequence lengths.");
+    }
+    if (key_sequence_length != past_sequence_length + query_sequence_length) {
+        throw std::invalid_argument(
+            "causal_self_attention requires key/value sequence length to equal past_sequence_length + query length.");
+    }
+
+    const std::size_t query_head_size = checked_positive_dim_to_size(query_dims[2], "attention query head size");
+    const std::size_t key_head_size = checked_positive_dim_to_size(key_dims[2], "attention key head size");
+    checked_positive_dim_to_size(value_dims[2], "attention value head size");
+    if (query_head_size != key_head_size) {
+        throw std::invalid_argument("causal_self_attention requires matching query and key head sizes.");
+    }
+}
+
+} // namespace
+
+tensors::Tensor causal_self_attention(const tensors::TensorView& query, const tensors::TensorView& key,
+                                      const tensors::TensorView& value, std::size_t past_sequence_length) {
+    validate_attention_inputs(query, key, value, past_sequence_length);
+
+    const auto& query_dims = query.tensor_info().shape.dims();
+    const auto& key_dims = key.tensor_info().shape.dims();
+    const auto& value_dims = value.tensor_info().shape.dims();
+
+    const std::size_t head_count = static_cast<std::size_t>(query_dims[0]);
+    const std::size_t query_sequence_length = static_cast<std::size_t>(query_dims[1]);
+    const std::size_t query_head_size = static_cast<std::size_t>(query_dims[2]);
+    const std::size_t key_sequence_length = static_cast<std::size_t>(key_dims[1]);
+    const std::size_t value_head_size = static_cast<std::size_t>(value_dims[2]);
+    const float score_scale = 1.0f / std::sqrt(static_cast<float>(query_head_size));
+
+    std::optional<tensors::Tensor> query_storage;
+    std::optional<tensors::Tensor> key_storage;
+    std::optional<tensors::Tensor> value_storage;
+    const tensors::TensorView query_f32 = maybe_cast_to_f32(query, query_storage);
+    const tensors::TensorView key_f32 = maybe_cast_to_f32(key, key_storage);
+    const tensors::TensorView value_f32 = maybe_cast_to_f32(value, value_storage);
+
+    tensors::Tensor result_f32 = tensors::Tensor::zeros(make_result_info(
+        "causal_self_attention_result", tensors::DType::F32,
+        tensors::Shape({query_dims[0], query_dims[1], value_dims[2]})));
+
+    for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
+        const tensors::TensorView query_head = cppinf::ops::reshape(
+            cppinf::ops::narrow(query_f32, 0, head_index, 1),
+            tensors::Shape({static_cast<std::int64_t>(query_sequence_length), static_cast<std::int64_t>(query_head_size)}));
+        const tensors::TensorView key_head = cppinf::ops::reshape(
+            cppinf::ops::narrow(key_f32, 0, head_index, 1),
+            tensors::Shape({static_cast<std::int64_t>(key_sequence_length), static_cast<std::int64_t>(query_head_size)}));
+        const tensors::TensorView value_head = cppinf::ops::reshape(
+            cppinf::ops::narrow(value_f32, 0, head_index, 1),
+            tensors::Shape({static_cast<std::int64_t>(key_sequence_length), static_cast<std::int64_t>(value_head_size)}));
+
+        const tensors::Tensor transposed_key = cppinf::ops::transpose_2d(key_head);
+        const tensors::Tensor attention_scores = cppinf::ops::matmul(query_head, transposed_key.view());
+        const tensors::Tensor masked_scores =
+            scale_and_causal_mask_scores(attention_scores.view(), score_scale, past_sequence_length);
+        const tensors::Tensor probabilities = cppinf::ops::softmax_last_dim(masked_scores.view());
+        const tensors::Tensor head_output = cppinf::ops::matmul(probabilities.view(), value_head);
+        copy_head_output_to_result(head_output, head_index, result_f32);
+    }
+
+    if (query.tensor_info().dtype == tensors::DType::F32) {
+        return result_f32;
+    }
+
+    return rename_tensor("causal_self_attention_result",
+                         cppinf::ops::cast(result_f32.view(), query.tensor_info().dtype));
+}
+
+} // namespace cppinf::nn
