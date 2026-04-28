@@ -1,0 +1,191 @@
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+
+#include <gtest/gtest.h>
+
+#include "loaders/hf/hf_model_summary.h"
+
+using cppinf::loaders::hf::format_model_summary;
+using cppinf::loaders::hf::HfConfig;
+using cppinf::loaders::hf::HfModelSummary;
+using cppinf::loaders::hf::load_model_summary;
+using cppinf::tensors::DType;
+using cppinf::tensors::Shape;
+using cppinf::tensors::TensorInfo;
+
+class HfModelSummaryTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        model_dir_ = std::filesystem::temp_directory_path() / "cppinf-hf-model-summary-test";
+        std::filesystem::create_directories(model_dir_);
+    }
+
+    void TearDown() override {
+        std::error_code error_code;
+        std::filesystem::remove_all(model_dir_, error_code);
+    }
+
+    void write_text_file(std::string_view file_name, std::string_view text) {
+        std::ofstream output(model_dir_ / file_name);
+        output << text;
+    }
+
+    void write_binary_file(std::string_view file_name, std::span<const std::byte> bytes) {
+        std::ofstream output(model_dir_ / file_name, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    }
+
+    void write_required_hf_files() {
+        write_text_file("config.json", R"({
+            "architectures": ["Qwen3ForCausalLM"],
+            "bos_token_id": 151643,
+            "eos_token_id": 151643,
+            "hidden_size": 1024,
+            "intermediate_size": 3072,
+            "max_position_embeddings": 32768,
+            "model_type": "qwen3",
+            "num_attention_heads": 16,
+            "num_hidden_layers": 28,
+            "num_key_value_heads": 8,
+            "torch_dtype": "bfloat16",
+            "vocab_size": 151936
+        })");
+        write_text_file("tokenizer.json", R"({"version":"1.0"})");
+        write_text_file("tokenizer_config.json", R"({"tokenizer_class":"Qwen2Tokenizer"})");
+
+        const std::array<std::byte, 20> tensor_data{
+            std::byte{0x10}, std::byte{0x11}, std::byte{0x12}, std::byte{0x13}, std::byte{0x14},
+            std::byte{0x15}, std::byte{0x16}, std::byte{0x17}, std::byte{0x18}, std::byte{0x19},
+            std::byte{0x1a}, std::byte{0x1b}, std::byte{0x1c}, std::byte{0x1d}, std::byte{0x1e},
+            std::byte{0x1f}, std::byte{0x20}, std::byte{0x21}, std::byte{0x22}, std::byte{0x23},
+        };
+        const std::string header =
+            R"({"__metadata__":{"format":"pt"},"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"token_ids":{"dtype":"U8","shape":[4],"data_offsets":[16,20]}})";
+        write_binary_file("model.safetensors", make_safetensors_file_bytes(header, tensor_data));
+    }
+
+    const std::filesystem::path& model_dir() const {
+        return model_dir_;
+    }
+
+  private:
+    std::vector<std::byte> make_safetensors_file_bytes(std::string_view header_json,
+                                                       std::span<const std::byte> tensor_data) const {
+        std::vector<std::byte> bytes;
+        append_u64_le(static_cast<std::uint64_t>(header_json.size()), bytes);
+
+        for (const char character : header_json) {
+            bytes.push_back(static_cast<std::byte>(character));
+        }
+
+        bytes.insert(bytes.end(), tensor_data.begin(), tensor_data.end());
+        return bytes;
+    }
+
+    void append_u64_le(std::uint64_t value, std::vector<std::byte>& bytes) const {
+        for (std::size_t index = 0; index < sizeof(std::uint64_t); ++index) {
+            bytes.push_back(static_cast<std::byte>((value >> (index * 8)) & 0xffU));
+        }
+    }
+
+    std::filesystem::path model_dir_;
+};
+
+TEST_F(HfModelSummaryTest, GivenValidDirectory_WhenLoadingSummary_ThenExpectedSummaryIsReturned) {
+    write_required_hf_files();
+
+    const HfModelSummary summary = load_model_summary(model_dir());
+    const HfModelSummary expected{
+        .model_dir = model_dir(),
+        .config =
+            HfConfig{
+                .architectures = {"Qwen3ForCausalLM"},
+                .model_type = "qwen3",
+                .hidden_size = 1024,
+                .intermediate_size = 3072,
+                .max_position_embeddings = 32768,
+                .num_attention_heads = 16,
+                .num_hidden_layers = 28,
+                .num_key_value_heads = 8,
+                .vocab_size = 151936,
+                .bos_token_id = 151643,
+                .eos_token_id = 151643,
+                .tensor_dtype = DType::BF16,
+            },
+        .metadata_count = 1,
+        .tensor_count = 2,
+        .tensor_preview =
+            {
+                TensorInfo{
+                    .name = "embed",
+                    .dtype = DType::BF16,
+                    .shape = Shape({2, 4}),
+                    .byte_offset = 0,
+                },
+                TensorInfo{
+                    .name = "token_ids",
+                    .dtype = DType::U8,
+                    .shape = Shape({4}),
+                    .byte_offset = 16,
+                },
+            },
+    };
+
+    EXPECT_EQ(expected, summary);
+}
+
+TEST_F(HfModelSummaryTest, GivenSummary_WhenFormatting_ThenReadableTextIsProduced) {
+    const HfModelSummary summary{
+        .model_dir = "/tmp/model",
+        .config =
+            HfConfig{
+                .architectures = {"Qwen3ForCausalLM"},
+                .model_type = "qwen3",
+                .hidden_size = 1024,
+                .intermediate_size = 3072,
+                .max_position_embeddings = 32768,
+                .num_attention_heads = 16,
+                .num_hidden_layers = 28,
+                .num_key_value_heads = 8,
+                .vocab_size = 151936,
+                .bos_token_id = 151643,
+                .eos_token_id = 151643,
+                .tensor_dtype = DType::BF16,
+            },
+        .metadata_count = 1,
+        .tensor_count = 2,
+        .tensor_preview =
+            {
+                TensorInfo{
+                    .name = "embed",
+                    .dtype = DType::BF16,
+                    .shape = Shape({2, 4}),
+                    .byte_offset = 0,
+                },
+            },
+    };
+
+    EXPECT_EQ(std::string("HF model directory: /tmp/model\n"
+                          "Model type: qwen3\n"
+                          "Architectures: Qwen3ForCausalLM\n"
+                          "Tensor dtype: bf16\n"
+                          "Hidden size: 1024\n"
+                          "Intermediate size: 3072\n"
+                          "Max position embeddings: 32768\n"
+                          "Hidden layers: 28\n"
+                          "Attention heads: 16\n"
+                          "Key/value heads: 8\n"
+                          "Vocabulary size: 151936\n"
+                          "BOS token id: 151643\n"
+                          "EOS token id: 151643\n"
+                          "Metadata entries: 1\n"
+                          "Tensor count: 2\n"
+                          "Tensor preview:\n"
+                          "  - embed | dtype=bf16 | shape=[2, 4] | offset=0 | bytes=16\n"),
+              format_model_summary(summary));
+}
