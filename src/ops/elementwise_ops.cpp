@@ -5,6 +5,7 @@
 
 #include <fmt/format.h>
 
+#include "ops/one_dnn_utils.h"
 #include "ops/op_utils.h"
 
 namespace cppinf::ops {
@@ -34,28 +35,12 @@ tensors::TensorInfo make_result_info(std::string_view name, const tensors::Tenso
 
 tensors::Tensor add(const tensors::TensorView& lhs, const tensors::TensorView& rhs) {
     validate_elementwise_inputs(lhs, rhs, "add");
-
-    tensors::Tensor result = tensors::Tensor::zeros(make_result_info("add_result", lhs));
-    for (std::size_t index = 0; index < lhs.tensor_info().shape.num_elements(); ++index) {
-        detail::store_float_value(lhs.tensor_info().dtype, result.mutable_data(), index,
-                                  detail::load_float_value(lhs.tensor_info().dtype, lhs.data(), index) +
-                                      detail::load_float_value(rhs.tensor_info().dtype, rhs.data(), index));
-    }
-
-    return result;
+    return detail::one_dnn_add(lhs, rhs);
 }
 
 tensors::Tensor mul(const tensors::TensorView& lhs, const tensors::TensorView& rhs) {
     validate_elementwise_inputs(lhs, rhs, "mul");
-
-    tensors::Tensor result = tensors::Tensor::zeros(make_result_info("mul_result", lhs));
-    for (std::size_t index = 0; index < lhs.tensor_info().shape.num_elements(); ++index) {
-        detail::store_float_value(lhs.tensor_info().dtype, result.mutable_data(), index,
-                                  detail::load_float_value(lhs.tensor_info().dtype, lhs.data(), index) *
-                                      detail::load_float_value(rhs.tensor_info().dtype, rhs.data(), index));
-    }
-
-    return result;
+    return detail::one_dnn_mul(lhs, rhs);
 }
 
 } // namespace cppinf::ops
