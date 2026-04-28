@@ -14,6 +14,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(FMT_DOC OFF CACHE BOOL "" FORCE)
 set(FMT_TEST OFF CACHE BOOL "" FORCE)
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_EXAMPLE_HO OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -33,14 +34,22 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.3
+)
+
+FetchContent_Declare(
   spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
   GIT_TAG v1.15.3
 )
 
-FetchContent_MakeAvailable(fmt googletest spdlog)
+FetchContent_MakeAvailable(fmt googletest nlohmann_json spdlog)
 
 set(CPPINF_SOURCES
+  src/files/safetensors_file.cpp
+  src/files/safetensors_file.h
   src/tensors/dtype.cpp
   src/tensors/dtype.h
   src/tensors/shape.cpp
@@ -55,17 +64,21 @@ add_executable(cppinf
   ${CPPINF_SOURCES}
   src/main.cpp
 )
-target_link_libraries(cppinf PRIVATE fmt::fmt spdlog::spdlog)
+target_include_directories(cppinf PRIVATE
+  ${PROJECT_SOURCE_DIR}/src
+)
+target_link_libraries(cppinf PRIVATE fmt::fmt nlohmann_json::nlohmann_json spdlog::spdlog)
 
 if(BUILD_TESTING)
   add_executable(cppinf_tests
     ${CPPINF_SOURCES}
-    tests/tensor_test.cpp
+    tests/files/safetensors_file_test.cpp
+    tests/tensors/tensor_test.cpp
   )
   target_include_directories(cppinf_tests PRIVATE
     ${PROJECT_SOURCE_DIR}/src
   )
-  target_link_libraries(cppinf_tests PRIVATE fmt::fmt GTest::gtest_main)
+  target_link_libraries(cppinf_tests PRIVATE fmt::fmt GTest::gtest_main nlohmann_json::nlohmann_json)
 
   gtest_discover_tests(cppinf_tests)
 endif()

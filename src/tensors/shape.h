@@ -8,20 +8,20 @@
 namespace cppinf::tensors {
 
 class Shape {
-public:
-  Shape() = default;
-  explicit Shape(std::vector<std::int64_t> dims);
+  public:
+    Shape() = default;
+    explicit Shape(std::vector<std::int64_t> dims);
 
-  const std::vector<std::int64_t> &dims() const;
-  std::size_t rank() const;
-  std::size_t num_elements() const;
+    const std::vector<std::int64_t>& dims() const;
+    std::size_t rank() const;
+    std::size_t num_elements() const;
 
-  bool operator==(const Shape &) const = default;
+    bool operator==(const Shape&) const = default;
 
-private:
-  std::vector<std::int64_t> dims_;
+  private:
+    std::vector<std::int64_t> dims_;
 };
 
-std::string to_string(const Shape &shape);
+std::string to_string(const Shape& shape);
 
 } // namespace cppinf::tensors
