@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 
+#include "ops/one_dnn_utils.h"
 #include "ops/op_utils.h"
 
 namespace cppinf::ops {
@@ -27,37 +28,7 @@ void validate_matmul_inputs(const tensors::TensorView& lhs, const tensors::Tenso
 
 tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView& rhs) {
     validate_matmul_inputs(lhs, rhs);
-
-    const auto& lhs_dims = lhs.tensor_info().shape.dims();
-    const auto& rhs_dims = rhs.tensor_info().shape.dims();
-    const std::size_t rows = static_cast<std::size_t>(lhs_dims[0]);
-    const std::size_t inner = static_cast<std::size_t>(lhs_dims[1]);
-    const std::size_t cols = static_cast<std::size_t>(rhs_dims[1]);
-    const tensors::DType result_dtype = lhs.tensor_info().dtype;
-
-    tensors::Tensor result = tensors::Tensor::zeros(tensors::TensorInfo{
-        .name = "matmul_result",
-        .dtype = result_dtype,
-        .shape = tensors::Shape({static_cast<std::int64_t>(rows), static_cast<std::int64_t>(cols)}),
-        .byte_offset = 0,
-    });
-
-    for (std::size_t row = 0; row < rows; ++row) {
-        for (std::size_t col = 0; col < cols; ++col) {
-            float sum = 0.0f;
-            for (std::size_t index = 0; index < inner; ++index) {
-                const float lhs_value =
-                    detail::load_float_value(lhs.tensor_info().dtype, lhs.data(), row * inner + index);
-                const float rhs_value =
-                    detail::load_float_value(rhs.tensor_info().dtype, rhs.data(), index * cols + col);
-                sum += lhs_value * rhs_value;
-            }
-
-            detail::store_float_value(result_dtype, result.mutable_data(), row * cols + col, sum);
-        }
-    }
-
-    return result;
+    return detail::one_dnn_matmul(lhs, rhs);
 }
 
 } // namespace cppinf::ops

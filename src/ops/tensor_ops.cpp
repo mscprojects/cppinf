@@ -9,6 +9,7 @@
 
 #include <fmt/format.h>
 
+#include "ops/one_dnn_utils.h"
 #include "ops/op_utils.h"
 
 namespace cppinf::ops {
@@ -45,15 +46,7 @@ tensors::Tensor cast(const tensors::TensorView& input, tensors::DType dtype) {
     const tensors::DType source_dtype = input.tensor_info().dtype;
     detail::validate_supported_float_dtype(source_dtype, "cast");
     detail::validate_supported_float_dtype(dtype, "cast");
-
-    tensors::Tensor result = tensors::Tensor::zeros(make_result_info("cast_result", dtype, input.tensor_info().shape));
-    const std::size_t element_count = input.tensor_info().shape.num_elements();
-    for (std::size_t index = 0; index < element_count; ++index) {
-        detail::store_float_value(dtype, result.mutable_data(), index,
-                                  detail::load_float_value(source_dtype, input.data(), index));
-    }
-
-    return result;
+    return detail::one_dnn_cast(input, dtype);
 }
 
 tensors::TensorView reshape(const tensors::TensorView& input, tensors::Shape shape) {
@@ -75,26 +68,30 @@ tensors::Tensor transpose_2d(const tensors::TensorView& input) {
         throw std::invalid_argument("transpose_2d requires a rank-2 tensor.");
     }
 
-    const auto& dims = input.tensor_info().shape.dims();
-    const std::size_t rows = checked_dim_to_size(dims[0], "transpose_2d rows");
-    const std::size_t cols = checked_dim_to_size(dims[1], "transpose_2d cols");
-    const std::size_t element_size = tensors::element_size_bytes(input.tensor_info().dtype);
+    if (input.tensor_info().dtype == tensors::DType::I64) {
+        const auto& dims = input.tensor_info().shape.dims();
+        const std::size_t rows = checked_dim_to_size(dims[0], "transpose_2d rows");
+        const std::size_t cols = checked_dim_to_size(dims[1], "transpose_2d cols");
+        const std::size_t element_size = tensors::element_size_bytes(input.tensor_info().dtype);
 
-    tensors::Tensor result = tensors::Tensor::zeros(
-        make_result_info("transpose_2d_result", input.tensor_info().dtype,
-                         tensors::Shape({checked_size_to_dim(cols, "transpose_2d output cols"),
-                                         checked_size_to_dim(rows, "transpose_2d output rows")})));
+        tensors::Tensor result = tensors::Tensor::zeros(
+            make_result_info("transpose_2d_result", input.tensor_info().dtype,
+                             tensors::Shape({checked_size_to_dim(cols, "transpose_2d output cols"),
+                                             checked_size_to_dim(rows, "transpose_2d output rows")})));
 
-    for (std::size_t row = 0; row < rows; ++row) {
-        for (std::size_t col = 0; col < cols; ++col) {
-            const std::size_t source_index = row * cols + col;
-            const std::size_t destination_index = col * rows + row;
-            std::memcpy(result.mutable_data().data() + destination_index * element_size,
-                        input.data().data() + source_index * element_size, element_size);
+        for (std::size_t row = 0; row < rows; ++row) {
+            for (std::size_t col = 0; col < cols; ++col) {
+                const std::size_t source_index = row * cols + col;
+                const std::size_t destination_index = col * rows + row;
+                std::memcpy(result.mutable_data().data() + destination_index * element_size,
+                            input.data().data() + source_index * element_size, element_size);
+            }
         }
+
+        return result;
     }
 
-    return result;
+    return detail::one_dnn_transpose_2d(input);
 }
 
 tensors::TensorView narrow(const tensors::TensorView& input, std::size_t dim, std::size_t start, std::size_t length) {

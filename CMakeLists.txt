@@ -15,6 +15,14 @@ set(FMT_DOC OFF CACHE BOOL "" FORCE)
 set(FMT_TEST OFF CACHE BOOL "" FORCE)
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+set(DNNL_BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(DNNL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(DNNL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(DNNL_CPU_RUNTIME SEQ CACHE STRING "" FORCE)
+set(DNNL_ENABLE_PRIMITIVE "BINARY;ELTWISE;MATMUL;REDUCTION;REORDER;SOFTMAX" CACHE STRING "" FORCE)
+set(DNNL_ENABLE_WORKLOAD INFERENCE CACHE STRING "" FORCE)
+set(DNNL_LIBRARY_TYPE STATIC CACHE STRING "" FORCE)
+set(ONEDNN_BUILD_GRAPH OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_EXAMPLE_HO OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -46,12 +54,18 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+  oneDNN
+  GIT_REPOSITORY https://github.com/uxlfoundation/oneDNN.git
+  GIT_TAG v3.11
+)
+
+FetchContent_Declare(
   spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
   GIT_TAG v1.15.3
 )
 
-FetchContent_MakeAvailable(CLI11 fmt googletest nlohmann_json spdlog)
+FetchContent_MakeAvailable(CLI11 fmt googletest nlohmann_json oneDNN spdlog)
 
 set(CPPINF_SOURCES
     src/cli/cli_app.cpp
@@ -70,6 +84,8 @@ set(CPPINF_SOURCES
     src/ops/matmul.h
     src/ops/nn_ops.cpp
     src/ops/nn_ops.h
+    src/ops/one_dnn_utils.cpp
+    src/ops/one_dnn_utils.h
     src/ops/op_utils.h
     src/ops/tensor_ops.cpp
     src/ops/tensor_ops.h
@@ -94,7 +110,7 @@ add_executable(cppinf
 target_include_directories(cppinf PRIVATE
     ${PROJECT_SOURCE_DIR}/src
 )
-target_link_libraries(cppinf PRIVATE CLI11::CLI11 fmt::fmt nlohmann_json::nlohmann_json spdlog::spdlog)
+target_link_libraries(cppinf PRIVATE CLI11::CLI11 dnnl fmt::fmt nlohmann_json::nlohmann_json spdlog::spdlog)
 
 if(BUILD_TESTING)
     add_executable(cppinf_tests
@@ -111,7 +127,8 @@ if(BUILD_TESTING)
         ${PROJECT_SOURCE_DIR}/src
         ${PROJECT_SOURCE_DIR}/tests
     )
-    target_link_libraries(cppinf_tests PRIVATE CLI11::CLI11 fmt::fmt GTest::gtest_main nlohmann_json::nlohmann_json)
+    target_link_libraries(cppinf_tests PRIVATE CLI11::CLI11 dnnl fmt::fmt GTest::gtest_main
+                                                 nlohmann_json::nlohmann_json)
 
     gtest_discover_tests(cppinf_tests)
 endif()
