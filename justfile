@@ -2,6 +2,9 @@ build:
     cmake -S . -B build
     cmake --build build
 
+run *args: build
+    ./build/cppinf {{args}}
+
 test: build
     ctest --test-dir build --output-on-failure
 

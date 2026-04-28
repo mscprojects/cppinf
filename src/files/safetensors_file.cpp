@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
 namespace cppinf::files {
@@ -21,7 +22,7 @@ struct ParsedSafetensorsHeader {
 
 std::size_t checked_to_size(std::uint64_t value, std::string_view field_name) {
     if (value > std::numeric_limits<std::size_t>::max()) {
-        throw std::overflow_error(std::string(field_name) + " does not fit in size_t.");
+        throw std::overflow_error(fmt::format("{} does not fit in size_t.", field_name));
     }
 
     return static_cast<std::size_t>(value);
@@ -42,7 +43,7 @@ std::uint64_t read_u64_le(std::span<const std::byte> bytes) {
 
 std::int64_t read_i64(const json& value, std::string_view field_name) {
     if (!value.is_number_integer()) {
-        throw std::invalid_argument(std::string(field_name) + " must be an integer.");
+        throw std::invalid_argument(fmt::format("{} must be an integer.", field_name));
     }
 
     return value.get<std::int64_t>();
@@ -111,7 +112,7 @@ ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
     try {
         header = json::parse(header_text);
     } catch (const json::parse_error& error) {
-        throw std::invalid_argument(std::string("Failed to parse safetensors header: ") + error.what());
+        throw std::invalid_argument(fmt::format("Failed to parse safetensors header: {}", error.what()));
     }
 
     if (!header.is_object()) {

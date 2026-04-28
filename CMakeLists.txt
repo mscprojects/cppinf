@@ -48,11 +48,19 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fmt googletest nlohmann_json spdlog)
 
 set(CPPINF_SOURCES
-  src/files/safetensors_file.cpp
-  src/files/safetensors_file.h
-  src/tensors/dtype.cpp
-  src/tensors/dtype.h
-  src/tensors/shape.cpp
+    src/cli/cli_app.cpp
+    src/cli/cli_app.h
+    src/files/safetensors_file.cpp
+    src/files/safetensors_file.h
+    src/loaders/hf/hf_config.cpp
+    src/loaders/hf/hf_config.h
+    src/loaders/hf/hf_model_files.cpp
+    src/loaders/hf/hf_model_files.h
+    src/loaders/hf/hf_model_summary.cpp
+    src/loaders/hf/hf_model_summary.h
+    src/tensors/dtype.cpp
+    src/tensors/dtype.h
+    src/tensors/shape.cpp
   src/tensors/shape.h
   src/tensors/tensor_info.cpp
   src/tensors/tensor_info.h
@@ -70,11 +78,15 @@ target_include_directories(cppinf PRIVATE
 target_link_libraries(cppinf PRIVATE fmt::fmt nlohmann_json::nlohmann_json spdlog::spdlog)
 
 if(BUILD_TESTING)
-  add_executable(cppinf_tests
-    ${CPPINF_SOURCES}
-    tests/files/safetensors_file_test.cpp
-    tests/tensors/tensor_test.cpp
-  )
+    add_executable(cppinf_tests
+        ${CPPINF_SOURCES}
+        tests/cli/cli_app_test.cpp
+        tests/files/safetensors_file_test.cpp
+        tests/loaders/hf/hf_config_test.cpp
+        tests/loaders/hf/hf_model_files_test.cpp
+        tests/loaders/hf/hf_model_summary_test.cpp
+        tests/tensors/tensor_test.cpp
+    )
   target_include_directories(cppinf_tests PRIVATE
     ${PROJECT_SOURCE_DIR}/src
   )

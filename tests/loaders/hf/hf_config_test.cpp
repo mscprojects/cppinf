@@ -1,0 +1,73 @@
+#include <string>
+
+#include <gtest/gtest.h>
+
+#include "loaders/hf/hf_config.h"
+
+using cppinf::loaders::hf::HfConfig;
+using cppinf::tensors::DType;
+
+class HfConfigTest : public ::testing::Test {};
+
+TEST_F(HfConfigTest, GivenValidJson_WhenParsing_ThenExpectedFieldsAreLoaded) {
+    const std::string json_text = R"({
+        "architectures": ["Qwen3ForCausalLM"],
+        "bos_token_id": 151643,
+        "eos_token_id": 151643,
+        "hidden_size": 1024,
+        "intermediate_size": 3072,
+        "max_position_embeddings": 32768,
+        "model_type": "qwen3",
+        "num_attention_heads": 16,
+        "num_hidden_layers": 28,
+        "num_key_value_heads": 8,
+        "torch_dtype": "bfloat16",
+        "vocab_size": 151936
+    })";
+
+    const HfConfig config = HfConfig::from_json_text(json_text);
+    const HfConfig expected{
+        .architectures = {"Qwen3ForCausalLM"},
+        .model_type = "qwen3",
+        .hidden_size = 1024,
+        .intermediate_size = 3072,
+        .max_position_embeddings = 32768,
+        .num_attention_heads = 16,
+        .num_hidden_layers = 28,
+        .num_key_value_heads = 8,
+        .vocab_size = 151936,
+        .bos_token_id = 151643,
+        .eos_token_id = 151643,
+        .tensor_dtype = DType::BF16,
+    };
+
+    EXPECT_EQ(expected, config);
+}
+
+TEST_F(HfConfigTest, GivenMissingField_WhenParsing_ThenItThrows) {
+    const std::string json_text = R"({
+        "architectures": ["Qwen3ForCausalLM"],
+        "bos_token_id": 151643
+    })";
+
+    EXPECT_THROW(static_cast<void>(HfConfig::from_json_text(json_text)), std::invalid_argument);
+}
+
+TEST_F(HfConfigTest, GivenUnsupportedTorchDtype_WhenParsing_ThenItThrows) {
+    const std::string json_text = R"({
+        "architectures": ["Qwen3ForCausalLM"],
+        "bos_token_id": 151643,
+        "eos_token_id": 151643,
+        "hidden_size": 1024,
+        "intermediate_size": 3072,
+        "max_position_embeddings": 32768,
+        "model_type": "qwen3",
+        "num_attention_heads": 16,
+        "num_hidden_layers": 28,
+        "num_key_value_heads": 8,
+        "torch_dtype": "float64",
+        "vocab_size": 151936
+    })";
+
+    EXPECT_THROW(static_cast<void>(HfConfig::from_json_text(json_text)), std::invalid_argument);
+}
