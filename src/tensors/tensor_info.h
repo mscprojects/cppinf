@@ -9,16 +9,16 @@
 namespace cppinf::tensors {
 
 struct TensorInfo {
-  std::string name;
-  DType dtype;
-  Shape shape;
-  std::size_t byte_offset{};
+    std::string name;
+    DType dtype;
+    Shape shape;
+    std::size_t byte_offset{};
 
-  std::size_t byte_size() const;
+    std::size_t byte_size() const;
 
-  bool operator==(const TensorInfo &) const = default;
+    bool operator==(const TensorInfo&) const = default;
 };
 
-std::string to_string(const TensorInfo &tensor_info);
+std::string to_string(const TensorInfo& tensor_info);
 
 } // namespace cppinf::tensors

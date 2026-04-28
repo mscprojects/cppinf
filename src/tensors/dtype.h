@@ -6,15 +6,16 @@
 namespace cppinf::tensors {
 
 enum class DType {
-  F16,
-  BF16,
-  F32,
-  I32,
-  I64,
-  U8,
+    F16,
+    BF16,
+    F32,
+    I32,
+    I64,
+    U8,
 };
 
 std::size_t element_size_bytes(DType dtype);
+DType parse_dtype(std::string_view dtype_name);
 std::string_view to_string(DType dtype);
 
 } // namespace cppinf::tensors
