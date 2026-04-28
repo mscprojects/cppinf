@@ -18,7 +18,7 @@ Tensor::Tensor(TensorInfo tensor_info, std::vector<std::byte> data)
 }
 
 Tensor Tensor::zeros(TensorInfo tensor_info) {
-    const std::size_t byte_size = tensor_info.byte_size();
+    const auto byte_size = tensor_info.byte_size();
     return Tensor(std::move(tensor_info), std::vector<std::byte>(byte_size));
 }
 

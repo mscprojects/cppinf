@@ -8,8 +8,8 @@
 namespace cppinf::tensors {
 
 std::size_t TensorInfo::byte_size() const {
-    const std::size_t element_count = shape.num_elements();
-    const std::size_t element_size = element_size_bytes(dtype);
+    const auto element_count = shape.num_elements();
+    const auto element_size = element_size_bytes(dtype);
 
     if (element_size != 0 && element_count > std::numeric_limits<std::size_t>::max() / element_size) {
         throw std::overflow_error("Tensor byte size overflowed.");

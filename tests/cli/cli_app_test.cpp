@@ -103,10 +103,10 @@ TEST_F(CliAppTest, GivenInvalidArguments_WhenRunning_ThenUsageIsReturned) {
 
 TEST_F(CliAppTest, GivenInspectHfArguments_WhenRunning_ThenFormattedSummaryIsReturned) {
     write_required_hf_files();
-    const std::string model_dir_path = model_dir().string();
+    const auto model_dir_path = model_dir().string();
     const std::string_view args[] = {"inspect", "hf", model_dir_path};
 
-    const CliResult result = run(args);
+    const auto result = run(args);
 
     EXPECT_EQ(0, result.exit_code);
     EXPECT_EQ(std::string::npos, result.output.find("Usage:"));
@@ -116,10 +116,10 @@ TEST_F(CliAppTest, GivenInspectHfArguments_WhenRunning_ThenFormattedSummaryIsRet
 
 TEST_F(CliAppTest, GivenInspectHfLimit_WhenRunning_ThenTensorPreviewIsLimited) {
     write_required_hf_files();
-    const std::string model_dir_path = model_dir().string();
+    const auto model_dir_path = model_dir().string();
     const std::string_view args[] = {"inspect", "hf", model_dir_path, "--limit", "1"};
 
-    const CliResult result = run(args);
+    const auto result = run(args);
 
     EXPECT_EQ(0, result.exit_code);
     EXPECT_NE(std::string::npos, result.output.find("Tensor preview (showing 1 of 2):"));
@@ -129,10 +129,10 @@ TEST_F(CliAppTest, GivenInspectHfLimit_WhenRunning_ThenTensorPreviewIsLimited) {
 
 TEST_F(CliAppTest, GivenInspectHfAll_WhenRunning_ThenAllTensorsAreShown) {
     write_required_hf_files();
-    const std::string model_dir_path = model_dir().string();
+    const auto model_dir_path = model_dir().string();
     const std::string_view args[] = {"inspect", "hf", model_dir_path, "--all"};
 
-    const CliResult result = run(args);
+    const auto result = run(args);
 
     EXPECT_EQ(0, result.exit_code);
     EXPECT_NE(std::string::npos, result.output.find("Tensors:\n"));

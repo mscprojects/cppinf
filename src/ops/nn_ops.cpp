@@ -16,7 +16,7 @@ namespace cppinf::ops {
 namespace {
 
 tensors::Tensor make_f32_tensor(std::string_view name, const tensors::Shape& shape, float value) {
-    tensors::Tensor tensor = detail::make_result_tensor(name, tensors::DType::F32, shape);
+    auto tensor = detail::make_result_tensor(name, tensors::DType::F32, shape);
     for (std::size_t index = 0; index < shape.num_elements(); ++index) {
         std::memcpy(tensor.mutable_data().data() + index * sizeof(float), &value, sizeof(float));
     }
@@ -52,14 +52,14 @@ tensors::Tensor silu(const tensors::TensorView& input) {
 tensors::Tensor softmax_last_dim(const tensors::TensorView& input) {
     validate_last_dim_operation_input(input, "softmax_last_dim");
 
-    const tensors::DType output_dtype = input.tensor_info().dtype;
-    const tensors::DType compute_dtype = output_dtype == tensors::DType::BF16 ? tensors::DType::F32 : output_dtype;
+    const auto output_dtype = input.tensor_info().dtype;
+    const auto compute_dtype = output_dtype == tensors::DType::BF16 ? tensors::DType::F32 : output_dtype;
 
     std::optional<tensors::Tensor> input_storage;
-    const tensors::TensorView input_compute =
+    const auto input_compute =
         detail::maybe_cast_to_dtype(input, compute_dtype, input_storage, "softmax_last_dim_result");
 
-    tensors::Tensor result =
+    auto result =
         detail::make_result_tensor("softmax_last_dim_result", compute_dtype, input_compute.tensor_info().shape);
     const dnnl::memory::desc src_desc =
         detail::make_dense_desc(input_compute.tensor_info().shape, compute_dtype, "softmax_last_dim");
@@ -89,30 +89,28 @@ tensors::Tensor rms_norm(const tensors::TensorView& input, const tensors::Tensor
         throw std::invalid_argument("rms_norm requires a rank-1 weight tensor.");
     }
 
-    const std::size_t last_dim = checked_dim_to_size(input.tensor_info().shape.dims().back(), "rms_norm last dim");
+    const auto last_dim = checked_dim_to_size(input.tensor_info().shape.dims().back(), "rms_norm last dim");
     if (checked_dim_to_size(weight.tensor_info().shape.dims()[0], "rms_norm weight size") != last_dim) {
         throw std::invalid_argument("rms_norm weight size must match the input last dimension.");
     }
 
     std::optional<tensors::Tensor> input_storage;
     std::optional<tensors::Tensor> weight_storage;
-    const tensors::TensorView input_f32 =
-        detail::maybe_cast_to_dtype(input, tensors::DType::F32, input_storage, "rms_norm_result");
-    const tensors::TensorView weight_f32 =
-        detail::maybe_cast_to_dtype(weight, tensors::DType::F32, weight_storage, "rms_norm_result");
+    const auto input_f32 = detail::maybe_cast_to_dtype(input, tensors::DType::F32, input_storage, "rms_norm_result");
+    const auto weight_f32 = detail::maybe_cast_to_dtype(weight, tensors::DType::F32, weight_storage, "rms_norm_result");
 
     std::vector<std::int64_t> reduced_dims = input_f32.tensor_info().shape.dims();
     reduced_dims.back() = 1;
-    const tensors::Shape reduced_shape(std::move(reduced_dims));
+    const auto reduced_shape = tensors::Shape(std::move(reduced_dims));
 
-    tensors::Tensor squared = detail::binary_with_one_dnn("rms_norm_squared", input_f32, input_f32,
-                                                          dnnl::algorithm::binary_mul, tensors::DType::F32);
-    tensors::Tensor mean_squares = detail::make_result_tensor("rms_norm_mean", tensors::DType::F32, reduced_shape);
+    auto squared = detail::binary_with_one_dnn("rms_norm_squared", input_f32, input_f32, dnnl::algorithm::binary_mul,
+                                               tensors::DType::F32);
+    auto mean_squares = detail::make_result_tensor("rms_norm_mean", tensors::DType::F32, reduced_shape);
     const dnnl::memory::desc squared_desc =
         detail::make_dense_desc(squared.tensor_info().shape, tensors::DType::F32, "rms_norm_mean");
     const dnnl::memory::desc mean_desc = detail::make_dense_desc(reduced_shape, tensors::DType::F32, "rms_norm_mean");
-    const dnnl::reduction::primitive_desc mean_primitive_desc(
-        detail::cpu_engine(), dnnl::algorithm::reduction_mean, squared_desc, mean_desc, 0.0f, 0.0f);
+    const dnnl::reduction::primitive_desc mean_primitive_desc(detail::cpu_engine(), dnnl::algorithm::reduction_mean,
+                                                              squared_desc, mean_desc, 0.0f, 0.0f);
     const dnnl::reduction mean_primitive(mean_primitive_desc);
     dnnl::memory squared_memory = detail::make_memory(squared_desc, squared.data());
     dnnl::memory mean_memory = detail::make_memory(mean_desc, mean_squares.mutable_data());
@@ -120,24 +118,22 @@ tensors::Tensor rms_norm(const tensors::TensorView& input, const tensors::Tensor
     mean_primitive.execute(stream, {{DNNL_ARG_SRC, squared_memory}, {DNNL_ARG_DST, mean_memory}});
     stream.wait();
 
-    tensors::Tensor epsilon_tensor = make_f32_tensor("rms_norm_epsilon", reduced_shape, epsilon);
-    tensors::Tensor variance =
-        detail::binary_with_one_dnn("rms_norm_variance", mean_squares.view(), epsilon_tensor.view(),
-                                    dnnl::algorithm::binary_add, tensors::DType::F32);
-    tensors::Tensor rms =
+    auto epsilon_tensor = make_f32_tensor("rms_norm_epsilon", reduced_shape, epsilon);
+    auto variance = detail::binary_with_one_dnn("rms_norm_variance", mean_squares.view(), epsilon_tensor.view(),
+                                                dnnl::algorithm::binary_add, tensors::DType::F32);
+    auto rms =
         detail::unary_with_one_dnn("rms_norm_rms", variance.view(), dnnl::algorithm::eltwise_sqrt, tensors::DType::F32);
-    tensors::Tensor ones_tensor = make_f32_tensor("rms_norm_one", reduced_shape, 1.0f);
-    tensors::Tensor inv_rms =
-        detail::binary_with_one_dnn("rms_norm_inv_rms", ones_tensor.view(), rms.view(), dnnl::algorithm::binary_div,
-                                    tensors::DType::F32);
-    tensors::Tensor normalized = detail::binary_with_one_dnn("rms_norm_normalized", input_f32, inv_rms.view(),
-                                                             dnnl::algorithm::binary_mul, tensors::DType::F32);
+    auto ones_tensor = make_f32_tensor("rms_norm_one", reduced_shape, 1.0f);
+    auto inv_rms = detail::binary_with_one_dnn("rms_norm_inv_rms", ones_tensor.view(), rms.view(),
+                                               dnnl::algorithm::binary_div, tensors::DType::F32);
+    auto normalized = detail::binary_with_one_dnn("rms_norm_normalized", input_f32, inv_rms.view(),
+                                                  dnnl::algorithm::binary_mul, tensors::DType::F32);
 
     std::vector<std::int64_t> weight_dims(input_f32.tensor_info().shape.rank(), 1);
     weight_dims.back() = weight_f32.tensor_info().shape.dims()[0];
-    const tensors::TensorView weight_broadcast = reshape(weight_f32, tensors::Shape(std::move(weight_dims)));
-    tensors::Tensor result = detail::binary_with_one_dnn("rms_norm_result", normalized.view(), weight_broadcast,
-                                                         dnnl::algorithm::binary_mul, tensors::DType::F32);
+    const auto weight_broadcast = reshape(weight_f32, tensors::Shape(std::move(weight_dims)));
+    auto result = detail::binary_with_one_dnn("rms_norm_result", normalized.view(), weight_broadcast,
+                                              dnnl::algorithm::binary_mul, tensors::DType::F32);
     return detail::maybe_cast_result(std::move(result), input.tensor_info().dtype, "rms_norm_result");
 }
 

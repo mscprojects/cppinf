@@ -90,7 +90,7 @@ class HfModelSummaryTest : public ::testing::Test {
 TEST_F(HfModelSummaryTest, GivenValidDirectory_WhenLoadingSummary_ThenExpectedSummaryIsReturned) {
     write_required_hf_files();
 
-    const HfModelSummary summary = load_model_summary(model_dir());
+    const auto summary = load_model_summary(model_dir());
     const HfModelSummary expected{
         .model_dir = model_dir(),
         .config =
@@ -133,7 +133,7 @@ TEST_F(HfModelSummaryTest, GivenValidDirectory_WhenLoadingSummary_ThenExpectedSu
 TEST_F(HfModelSummaryTest, GivenTensorLimit_WhenLoadingSummary_ThenTensorPreviewIsTrimmed) {
     write_required_hf_files();
 
-    const HfModelSummary summary = load_model_summary(model_dir(), 1);
+    const auto summary = load_model_summary(model_dir(), 1);
     const std::vector<TensorInfo> expected{
         TensorInfo{
             .name = "embed",

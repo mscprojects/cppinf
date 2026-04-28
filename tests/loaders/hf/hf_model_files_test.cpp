@@ -90,7 +90,7 @@ TEST_F(HfModelFilesTest, GivenValidDirectory_WhenResolving_ThenExpectedFilesAreR
     write_text_file("merges.txt", "foo bar");
     write_text_file("vocab.json", R"({"hello": 0})");
 
-    const HfModelFiles model_files = HfModelFiles::from_dir(model_dir());
+    const auto model_files = HfModelFiles::from_dir(model_dir());
     const HfModelFiles expected{
         .model_dir = model_dir(),
         .config_path = model_dir() / "config.json",
@@ -108,7 +108,7 @@ TEST_F(HfModelFilesTest, GivenValidDirectory_WhenResolving_ThenExpectedFilesAreR
 TEST_F(HfModelFilesTest, GivenOptionalFilesMissing_WhenResolving_ThenOptionalsAreEmpty) {
     write_required_hf_files();
 
-    const HfModelFiles model_files = HfModelFiles::from_dir(model_dir());
+    const auto model_files = HfModelFiles::from_dir(model_dir());
 
     EXPECT_FALSE(model_files.generation_config_path);
     EXPECT_FALSE(model_files.merges_path);
@@ -124,8 +124,8 @@ TEST_F(HfModelFilesTest, GivenMissingRequiredFile_WhenResolving_ThenItThrows) {
 TEST_F(HfModelFilesTest, GivenValidDirectory_WhenLoadingConfigAndWeights_ThenTheyAreAvailable) {
     write_required_hf_files();
 
-    const HfModelFiles model_files = HfModelFiles::from_dir(model_dir());
-    const HfConfig config = model_files.load_config();
+    const auto model_files = HfModelFiles::from_dir(model_dir());
+    const auto config = model_files.load_config();
     const auto weights = model_files.load_weights();
     const HfConfig expected_config{
         .architectures = {"Qwen3ForCausalLM"},

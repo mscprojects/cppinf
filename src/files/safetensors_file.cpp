@@ -68,8 +68,8 @@ std::pair<std::size_t, std::size_t> parse_data_offsets(const json& value) {
         throw std::invalid_argument("data_offsets must contain exactly two integers.");
     }
 
-    const std::int64_t begin = read_i64(value[0], "data_offsets[0]");
-    const std::int64_t end = read_i64(value[1], "data_offsets[1]");
+    const auto begin = read_i64(value[0], "data_offsets[0]");
+    const auto end = read_i64(value[1], "data_offsets[1]");
     if (begin < 0 || end < 0 || end < begin) {
         throw std::invalid_argument("data_offsets must be non-negative and ordered.");
     }
@@ -98,8 +98,8 @@ std::unordered_map<std::string, std::string> parse_metadata(const json& value) {
 }
 
 ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
-    const std::size_t header_size = checked_to_size(read_u64_le(file_bytes), "header size");
-    const std::size_t tensor_data_offset = sizeof(std::uint64_t) + header_size;
+    const auto header_size = checked_to_size(read_u64_le(file_bytes), "header size");
+    const auto tensor_data_offset = sizeof(std::uint64_t) + header_size;
 
     if (tensor_data_offset > file_bytes.size()) {
         throw std::invalid_argument("Safetensors header extends beyond the file size.");
@@ -133,9 +133,9 @@ ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
             throw std::invalid_argument("Tensor entries must be JSON objects.");
         }
 
-        const json& tensor_json = iterator.value();
-        const cppinf::tensors::DType dtype = cppinf::tensors::parse_dtype(tensor_json.at("dtype").get<std::string>());
-        const cppinf::tensors::Shape shape = parse_shape(tensor_json.at("shape"));
+        const auto& tensor_json = iterator.value();
+        const auto dtype = cppinf::tensors::parse_dtype(tensor_json.at("dtype").get<std::string>());
+        const auto shape = parse_shape(tensor_json.at("shape"));
         const auto [begin, end] = parse_data_offsets(tensor_json.at("data_offsets"));
 
         tensors::TensorInfo tensor_info{
@@ -160,7 +160,7 @@ ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
 }
 
 std::vector<std::byte> read_file_bytes(const std::filesystem::path& path) {
-    const std::uintmax_t file_size = std::filesystem::file_size(path);
+    const auto file_size = std::filesystem::file_size(path);
     if (file_size > std::numeric_limits<std::size_t>::max()) {
         throw std::overflow_error("Safetensors file is too large to load into memory.");
     }
@@ -195,7 +195,7 @@ SafetensorsFile::SafetensorsFile(std::vector<std::byte> file_bytes, std::size_t 
 }
 
 SafetensorsFile SafetensorsFile::from_bytes(std::vector<std::byte> file_bytes) {
-    const detail::ParsedSafetensorsHeader parsed_header = detail::parse_header(file_bytes);
+    const auto parsed_header = detail::parse_header(file_bytes);
     return SafetensorsFile(std::move(file_bytes), parsed_header.tensor_data_offset, parsed_header.tensor_infos,
                            parsed_header.metadata);
 }

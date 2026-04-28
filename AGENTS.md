@@ -6,6 +6,7 @@ When working in this repository:
 - Use PascalCase for class names.
 - Use 4 spaces for indentation.
 - Keep lines within 120 characters when formatting.
+- Prefer `auto` or `const auto` when the type remains obvious.
 - Prefer `fmt::format` over string concatenation when building strings.
 - Short single-line comments for non-obvious variables and functions are okay.
 - Add brief contract comments to public functions in headers.

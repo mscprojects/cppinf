@@ -29,7 +29,7 @@ class SafetensorsFileTest : public ::testing::Test {
     }
 
     std::filesystem::path write_temp_file(std::span<const std::byte> file_bytes) {
-        const std::filesystem::path path = temp_dir_.path() / "weights.safetensors";
+        const auto path = temp_dir_.path() / "weights.safetensors";
         std::ofstream output(path, std::ios::binary);
         output.write(reinterpret_cast<const char*>(file_bytes.data()), static_cast<std::streamsize>(file_bytes.size()));
         output.close();
@@ -56,7 +56,7 @@ TEST_F(SafetensorsFileTest, GivenValidFileBytes_WhenLoading_ThenMetadataAndTenso
     const std::string header =
         R"({"__metadata__":{"format":"pt"},"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"token_ids":{"dtype":"U8","shape":[4],"data_offsets":[16,20]}})";
 
-    const SafetensorsFile file = SafetensorsFile::from_bytes(make_file_bytes(header, tensor_data));
+    const auto file = SafetensorsFile::from_bytes(make_file_bytes(header, tensor_data));
 
     ASSERT_EQ(std::size_t{2}, file.tensors().size());
     EXPECT_EQ(std::string("pt"), file.metadata().at("format"));
@@ -81,7 +81,7 @@ TEST_F(SafetensorsFileTest, GivenTensorName_WhenCreatingView_ThenViewPointsIntoO
     };
     const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
 
-    const SafetensorsFile file = SafetensorsFile::from_bytes(make_file_bytes(header, tensor_data));
+    const auto file = SafetensorsFile::from_bytes(make_file_bytes(header, tensor_data));
     const auto view = file.tensor_view("weights");
 
     ASSERT_EQ(std::size_t{4}, view.byte_size());
@@ -98,7 +98,7 @@ TEST_F(SafetensorsFileTest, GivenUnknownTensor_WhenQueryingTensorInfo_ThenItThro
     };
     const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
 
-    const SafetensorsFile file = SafetensorsFile::from_bytes(make_file_bytes(header, tensor_data));
+    const auto file = SafetensorsFile::from_bytes(make_file_bytes(header, tensor_data));
 
     EXPECT_THROW(static_cast<void>(file.tensor_info("missing")), std::out_of_range);
 }
@@ -113,7 +113,7 @@ TEST_F(SafetensorsFileTest, GivenFilePath_WhenLoading_ThenFileBytesAreParsed) {
     const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
 
     const auto path = write_temp_file(make_file_bytes(header, tensor_data));
-    const SafetensorsFile file = SafetensorsFile::from_file(path);
+    const auto file = SafetensorsFile::from_file(path);
 
     EXPECT_TRUE(file.contains_tensor("weights"));
     EXPECT_EQ(DType::U8, file.tensor_info("weights").dtype);

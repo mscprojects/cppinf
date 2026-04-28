@@ -92,7 +92,7 @@ dnnl::memory make_memory(const dnnl::memory::desc& desc, std::span<std::byte> by
 
 tensors::Tensor cast_with_one_dnn(const tensors::TensorView& input, tensors::DType dtype,
                                   std::string_view result_name) {
-    tensors::Tensor result = make_result_tensor(result_name, dtype, input.tensor_info().shape);
+    auto result = make_result_tensor(result_name, dtype, input.tensor_info().shape);
     const dnnl::memory::desc src_desc = make_dense_desc(input.tensor_info().shape, input.tensor_info().dtype, "cast");
     const dnnl::memory::desc dst_desc = make_dense_desc(result.tensor_info().shape, dtype, "cast");
     dnnl::memory src_memory = make_memory(src_desc, input.data());
@@ -128,10 +128,10 @@ tensors::Tensor binary_with_one_dnn(std::string_view result_name, const tensors:
 
     std::optional<tensors::Tensor> lhs_storage;
     std::optional<tensors::Tensor> rhs_storage;
-    const tensors::TensorView lhs_compute = maybe_cast_to_dtype(lhs, compute_dtype, lhs_storage, result_name);
-    const tensors::TensorView rhs_compute = maybe_cast_to_dtype(rhs, compute_dtype, rhs_storage, result_name);
+    const auto lhs_compute = maybe_cast_to_dtype(lhs, compute_dtype, lhs_storage, result_name);
+    const auto rhs_compute = maybe_cast_to_dtype(rhs, compute_dtype, rhs_storage, result_name);
 
-    tensors::Tensor result = make_result_tensor(result_name, compute_dtype, lhs_compute.tensor_info().shape);
+    auto result = make_result_tensor(result_name, compute_dtype, lhs_compute.tensor_info().shape);
     const dnnl::memory::desc src0_desc = make_dense_desc(lhs_compute.tensor_info().shape, compute_dtype, result_name);
     const dnnl::memory::desc src1_desc = make_dense_desc(rhs_compute.tensor_info().shape, compute_dtype, result_name);
     const dnnl::memory::desc dst_desc = make_dense_desc(result.tensor_info().shape, compute_dtype, result_name);
@@ -152,9 +152,9 @@ tensors::Tensor unary_with_one_dnn(std::string_view result_name, const tensors::
     const tensors::DType compute_dtype = output_dtype == tensors::DType::BF16 ? tensors::DType::F32 : output_dtype;
 
     std::optional<tensors::Tensor> input_storage;
-    const tensors::TensorView input_compute = maybe_cast_to_dtype(input, compute_dtype, input_storage, result_name);
+    const auto input_compute = maybe_cast_to_dtype(input, compute_dtype, input_storage, result_name);
 
-    tensors::Tensor result = make_result_tensor(result_name, compute_dtype, input_compute.tensor_info().shape);
+    auto result = make_result_tensor(result_name, compute_dtype, input_compute.tensor_info().shape);
     const dnnl::memory::desc src_desc = make_dense_desc(input_compute.tensor_info().shape, compute_dtype, result_name);
     const dnnl::memory::desc dst_desc = make_dense_desc(result.tensor_info().shape, compute_dtype, result_name);
     const dnnl::eltwise_forward::primitive_desc primitive_desc(cpu_engine(), dnnl::prop_kind::forward_inference,

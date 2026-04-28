@@ -8,7 +8,7 @@ namespace cppinf::loaders::hf {
 namespace detail {
 
 std::filesystem::path require_file(const std::filesystem::path& model_dir, std::string_view file_name) {
-    const std::filesystem::path path = model_dir / file_name;
+    const auto path = model_dir / file_name;
     if (!std::filesystem::is_regular_file(path)) {
         throw std::invalid_argument(
             fmt::format("Required Hugging Face file '{}' is missing from '{}'.", file_name, model_dir.string()));
@@ -18,7 +18,7 @@ std::filesystem::path require_file(const std::filesystem::path& model_dir, std::
 }
 
 std::optional<std::filesystem::path> optional_file(const std::filesystem::path& model_dir, std::string_view file_name) {
-    const std::filesystem::path path = model_dir / file_name;
+    const auto path = model_dir / file_name;
     if (std::filesystem::is_regular_file(path)) {
         return path;
     }

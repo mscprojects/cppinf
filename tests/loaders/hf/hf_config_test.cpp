@@ -25,7 +25,7 @@ TEST_F(HfConfigTest, GivenValidJson_WhenParsing_ThenExpectedFieldsAreLoaded) {
         "vocab_size": 151936
     })";
 
-    const HfConfig config = HfConfig::from_json_text(json_text);
+    const auto config = HfConfig::from_json_text(json_text);
     const HfConfig expected{
         .architectures = {"Qwen3ForCausalLM"},
         .model_type = "qwen3",
