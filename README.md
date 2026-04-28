@@ -4,16 +4,15 @@ A small C++/CMake scaffold for a future LLM inference project.
 
 Right now it is intentionally minimal:
 
-- `src/greeting.cpp`
-- `src/greeting.h`
 - `src/main.cpp`
-- `tests/greeting_test.cpp`
-- `tests/test.h`
+- `src/tensors/`
+- `tests/tensor_test.cpp`
 - `CMakeLists.txt`
+- `.clang-format`
 - `justfile`
 - `.gitignore`
 
-The project fetches `fmt` and `spdlog` during CMake configure.
+The project fetches `fmt`, `spdlog`, and `GoogleTest` during CMake configure.
 
 ## Build
 
@@ -34,8 +33,19 @@ cmake --build build
 just test
 ```
 
-That runs both the hello-world smoke test and the small test executable under
-CTest.
+That runs the hello-world smoke test plus the GoogleTest suite through CTest.
+
+`src/tensors/` contains a small metadata-first tensor scaffold: dtypes, shapes,
+tensor info, tensor views, and readable `to_string(...)` helpers.
+
+## Lint
+
+```sh
+just lint
+```
+
+That formats all C++ source and header files in `src/` and `tests/` with
+`clang-format`.
 
 ## Run
 
