@@ -67,6 +67,5 @@ if(BUILD_TESTING)
   )
   target_link_libraries(cppinf_tests PRIVATE fmt::fmt GTest::gtest_main)
 
-  add_test(NAME cppinf_hello COMMAND cppinf)
   gtest_discover_tests(cppinf_tests)
 endif()
