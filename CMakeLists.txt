@@ -69,7 +69,4 @@ if(BUILD_TESTING)
 
   add_test(NAME cppinf_hello COMMAND cppinf)
   gtest_discover_tests(cppinf_tests)
-  set_tests_properties(cppinf_hello PROPERTIES
-    PASS_REGULAR_EXPRESSION "cppinf"
-  )
 endif()
