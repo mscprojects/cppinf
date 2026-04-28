@@ -45,7 +45,8 @@ tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView
     tensors::Tensor result =
         detail::make_result_tensor("matmul_result", compute_dtype, tensors::Shape({lhs_dims[0], rhs_dims[1]}));
 
-    const dnnl::memory::desc src_desc = detail::make_dense_desc(lhs_compute.tensor_info().shape, compute_dtype, "matmul");
+    const dnnl::memory::desc src_desc =
+        detail::make_dense_desc(lhs_compute.tensor_info().shape, compute_dtype, "matmul");
     const dnnl::memory::desc weights_desc =
         detail::make_dense_desc(rhs_compute.tensor_info().shape, compute_dtype, "matmul");
     const dnnl::memory::desc dst_desc = detail::make_dense_desc(result.tensor_info().shape, compute_dtype, "matmul");
