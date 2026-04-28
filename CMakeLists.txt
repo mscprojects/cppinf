@@ -68,6 +68,11 @@ set(CPPINF_SOURCES
     src/ops/elementwise_ops.h
     src/ops/matmul.cpp
     src/ops/matmul.h
+    src/ops/nn_ops.cpp
+    src/ops/nn_ops.h
+    src/ops/op_utils.h
+    src/ops/tensor_ops.cpp
+    src/ops/tensor_ops.h
     src/tensors/dtype.cpp
     src/tensors/dtype.h
     src/tensors/bfloat16.cpp

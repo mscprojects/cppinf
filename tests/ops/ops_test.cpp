@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -9,18 +10,27 @@
 
 #include "ops/elementwise_ops.h"
 #include "ops/matmul.h"
+#include "ops/nn_ops.h"
+#include "ops/tensor_ops.h"
 #include "tensors/bfloat16.h"
 #include "tensors/tensor.h"
 
 using cppinf::ops::add;
+using cppinf::ops::cast;
 using cppinf::ops::matmul;
 using cppinf::ops::mul;
-using cppinf::tensors::bfloat16_bits_to_float;
+using cppinf::ops::narrow;
+using cppinf::ops::reshape;
+using cppinf::ops::rms_norm;
+using cppinf::ops::silu;
+using cppinf::ops::softmax_last_dim;
+using cppinf::ops::transpose_2d;
 using cppinf::tensors::DType;
 using cppinf::tensors::float_to_bfloat16_bits;
 using cppinf::tensors::Shape;
 using cppinf::tensors::Tensor;
 using cppinf::tensors::TensorInfo;
+using cppinf::tensors::TensorView;
 
 class OpsTest : public ::testing::Test {
   protected:
@@ -62,6 +72,62 @@ class OpsTest : public ::testing::Test {
             },
             std::move(bytes));
     }
+
+    Tensor make_bf16_bits_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
+                                 std::initializer_list<std::uint16_t> values) const {
+        std::vector<std::byte> bytes(values.size() * sizeof(std::uint16_t));
+        std::size_t index = 0;
+        for (const std::uint16_t value : values) {
+            std::memcpy(bytes.data() + index * sizeof(std::uint16_t), &value, sizeof(std::uint16_t));
+            ++index;
+        }
+
+        return Tensor(
+            TensorInfo{
+                .name = std::string(name),
+                .dtype = DType::BF16,
+                .shape = Shape(std::vector<std::int64_t>(dims)),
+                .byte_offset = 0,
+            },
+            std::move(bytes));
+    }
+
+    std::vector<float> read_float_values(const TensorView& tensor_view) const {
+        std::vector<float> values;
+        values.reserve(tensor_view.tensor_info().shape.num_elements());
+
+        if (tensor_view.tensor_info().dtype == DType::F32) {
+            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
+                float value = 0.0f;
+                std::memcpy(&value, tensor_view.data().data() + index * sizeof(float), sizeof(float));
+                values.push_back(value);
+            }
+            return values;
+        }
+
+        if (tensor_view.tensor_info().dtype == DType::BF16) {
+            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
+                std::uint16_t bits = 0;
+                std::memcpy(&bits, tensor_view.data().data() + index * sizeof(std::uint16_t), sizeof(std::uint16_t));
+                values.push_back(cppinf::tensors::bfloat16_bits_to_float(bits));
+            }
+            return values;
+        }
+
+        throw std::invalid_argument("read_float_values supports only f32 and bf16 tensors.");
+    }
+
+    void expect_float_values_near(const TensorView& tensor_view, std::initializer_list<float> expected,
+                                  float tolerance) const {
+        const std::vector<float> actual_values = read_float_values(tensor_view);
+        ASSERT_EQ(expected.size(), actual_values.size());
+
+        std::size_t index = 0;
+        for (const float expected_value : expected) {
+            EXPECT_NEAR(expected_value, actual_values[index], tolerance) << "index=" << index;
+            ++index;
+        }
+    }
 };
 
 TEST_F(OpsTest, GivenMatchingTensors_WhenAdding_ThenElementwiseSumIsReturned) {
@@ -86,6 +152,63 @@ TEST_F(OpsTest, GivenCompatibleMatrices_WhenMultiplying_ThenMatmulResultIsReturn
     const Tensor expected = make_f32_tensor("matmul_result", {2, 2}, {58.0f, 64.0f, 139.0f, 154.0f});
 
     EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
+}
+
+TEST_F(OpsTest, GivenF32Tensor_WhenCastingToBf16_ThenExpectedBitsAreReturned) {
+    const Tensor input = make_f32_tensor("input", {2, 2}, {1.5f, -2.25f, 0.5f, -0.75f});
+    const Tensor expected = make_bf16_bits_tensor("cast_result", {2, 2}, {0x3fc0U, 0xc010U, 0x3f00U, 0xbf40U});
+
+    EXPECT_EQ(expected, cast(input.view(), DType::BF16));
+}
+
+TEST_F(OpsTest, GivenBf16Tensor_WhenCastingToF32_ThenExpectedValuesAreReturned) {
+    const Tensor input = make_bf16_bits_tensor("input", {2, 2}, {0x3fc0U, 0xc010U, 0x3f00U, 0xbf40U});
+    const Tensor expected = make_f32_tensor("cast_result", {2, 2}, {1.5f, -2.25f, 0.5f, -0.75f});
+
+    EXPECT_EQ(expected, cast(input.view(), DType::F32));
+}
+
+TEST_F(OpsTest, GivenTensorView_WhenReshaping_ThenMetadataChangesOnly) {
+    const Tensor input = make_f32_tensor("input", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+    const TensorView reshaped = reshape(input.view(), Shape({4}));
+
+    EXPECT_EQ(std::string("input"), reshaped.tensor_info().name);
+    EXPECT_EQ(DType::F32, reshaped.tensor_info().dtype);
+    EXPECT_EQ(Shape({4}), reshaped.tensor_info().shape);
+    EXPECT_EQ(std::size_t{0}, reshaped.tensor_info().byte_offset);
+    EXPECT_EQ(input.view().data().data(), reshaped.data().data());
+}
+
+TEST_F(OpsTest, GivenIncompatibleShape_WhenReshaping_ThenItThrows) {
+    const Tensor input = make_f32_tensor("input", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+    EXPECT_THROW(static_cast<void>(reshape(input.view(), Shape({3}))), std::invalid_argument);
+}
+
+TEST_F(OpsTest, GivenRank2Tensor_WhenTransposing_ThenExpectedResultIsReturned) {
+    const Tensor input = make_f32_tensor("input", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    const Tensor expected = make_f32_tensor("transpose_2d_result", {3, 2}, {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f});
+
+    EXPECT_EQ(expected, transpose_2d(input.view()));
+}
+
+TEST_F(OpsTest, GivenTensorView_WhenNarrowingFirstDimension_ThenSubspanIsReturned) {
+    const Tensor input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+
+    const TensorView narrowed = narrow(input.view(), 0, 1, 2);
+
+    EXPECT_EQ(std::string("input"), narrowed.tensor_info().name);
+    EXPECT_EQ(Shape({2, 2}), narrowed.tensor_info().shape);
+    EXPECT_EQ(std::size_t{2 * sizeof(float)}, narrowed.tensor_info().byte_offset);
+    EXPECT_EQ(input.view().data().data() + 2 * sizeof(float), narrowed.data().data());
+    expect_float_values_near(narrowed, {3.0f, 4.0f, 5.0f, 6.0f}, 0.0f);
+}
+
+TEST_F(OpsTest, GivenNonZeroDimension_WhenNarrowing_ThenItThrows) {
+    const Tensor input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+
+    EXPECT_THROW(static_cast<void>(narrow(input.view(), 1, 0, 1)), std::invalid_argument);
 }
 
 TEST_F(OpsTest, GivenMatchingBf16Tensors_WhenAdding_ThenElementwiseSumIsReturned) {
@@ -117,6 +240,69 @@ TEST_F(OpsTest, GivenTorchOracleBf16Matrices_WhenMultiplying_ThenExpectedResultI
     const Tensor expected = make_bf16_tensor("matmul_result", {2, 2}, {-11.625f, -4.875f, 16.125f, -5.375f});
 
     EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
+}
+
+TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingSilu_ThenExpectedValuesAreReturned) {
+    // Golden values generated offline with:
+    // uv run --with torch==2.11.0 python - <<'PY'
+    // import torch
+    // import torch.nn.functional as F
+    // x = torch.tensor([[-1.5, -0.25, 0.5, 2.0], [3.0, -4.5, 1.25, 0.75]], dtype=torch.bfloat16)
+    // print(F.silu(x).float())
+    // PY
+    const Tensor input = make_bf16_tensor("input", {2, 4}, {-1.5f, -0.25f, 0.5f, 2.0f, 3.0f, -4.5f, 1.25f, 0.75f});
+
+    const Tensor result = silu(input.view());
+
+    EXPECT_EQ(std::string("silu_result"), result.tensor_info().name);
+    EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
+    EXPECT_EQ(Shape({2, 4}), result.tensor_info().shape);
+    expect_float_values_near(
+        result.view(),
+        {-0.2734375f, -0.109375f, 0.310546875f, 1.7578125f, 2.859375f, -0.0495605469f, 0.97265625f, 0.5078125f}, 1e-6f);
+}
+
+TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingSoftmaxLastDim_ThenExpectedValuesAreReturned) {
+    // Golden values generated offline with:
+    // uv run --with torch==2.11.0 python - <<'PY'
+    // import torch
+    // x = torch.tensor([[1.0, -2.5, 3.25, 0.75], [4.5, 0.5, -1.75, 2.25]], dtype=torch.bfloat16)
+    // print(torch.softmax(x, dim=-1).float())
+    // PY
+    const Tensor input = make_bf16_tensor("input", {2, 4}, {1.0f, -2.5f, 3.25f, 0.75f, 4.5f, 0.5f, -1.75f, 2.25f});
+
+    const Tensor result = softmax_last_dim(input.view());
+
+    EXPECT_EQ(std::string("softmax_last_dim_result"), result.tensor_info().name);
+    EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
+    EXPECT_EQ(Shape({2, 4}), result.tensor_info().shape);
+    expect_float_values_near(
+        result.view(),
+        {0.0883789062f, 0.0026702881f, 0.83984375f, 0.0688476562f, 0.88671875f, 0.0162353516f, 0.0017166138f, 0.09375f},
+        1e-6f);
+}
+
+TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingRmsNorm_ThenExpectedValuesAreReturned) {
+    // Golden values generated offline with:
+    // uv run --with torch==2.11.0 python - <<'PY'
+    // import torch
+    // x = torch.tensor([[-1.5, -0.25, 0.5, 2.0], [3.0, -4.5, 1.25, 0.75]], dtype=torch.bfloat16).float()
+    // w = torch.tensor([1.0, 0.5, -1.5, 2.0], dtype=torch.bfloat16).float()
+    // eps = 1e-5
+    // print((x * torch.rsqrt(x.square().mean(dim=-1, keepdim=True) + eps) * w).to(torch.bfloat16).float())
+    // PY
+    const Tensor input = make_bf16_tensor("input", {2, 4}, {-1.5f, -0.25f, 0.5f, 2.0f, 3.0f, -4.5f, 1.25f, 0.75f});
+    const Tensor weight = make_bf16_tensor("weight", {4}, {1.0f, 0.5f, -1.5f, 2.0f});
+
+    const Tensor result = rms_norm(input.view(), weight.view(), 1e-5f);
+
+    EXPECT_EQ(std::string("rms_norm_result"), result.tensor_info().name);
+    EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
+    EXPECT_EQ(Shape({2, 4}), result.tensor_info().shape);
+    expect_float_values_near(
+        result.view(),
+        {-1.171875f, -0.09765625f, -0.5859375f, 3.125f, 1.0703125f, -0.8046875f, -0.66796875f, 0.53515625f},
+        1e-6f);
 }
 
 TEST_F(OpsTest, GivenUnsupportedTensorType_WhenAdding_ThenItThrows) {
