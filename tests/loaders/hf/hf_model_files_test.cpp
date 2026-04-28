@@ -11,6 +11,7 @@
 #include "loaders/hf/hf_config.h"
 #include "loaders/hf/hf_model_files.h"
 #include "tensors/dtype.h"
+#include "test_temp_dir.h"
 
 using cppinf::loaders::hf::HfConfig;
 using cppinf::loaders::hf::HfModelFiles;
@@ -18,23 +19,13 @@ using cppinf::tensors::DType;
 
 class HfModelFilesTest : public ::testing::Test {
   protected:
-    void SetUp() override {
-        model_dir_ = std::filesystem::temp_directory_path() / "cppinf-hf-model-files-test";
-        std::filesystem::create_directories(model_dir_);
-    }
-
-    void TearDown() override {
-        std::error_code error_code;
-        std::filesystem::remove_all(model_dir_, error_code);
-    }
-
     void write_text_file(std::string_view file_name, std::string_view text) {
-        std::ofstream output(model_dir_ / file_name);
+        std::ofstream output(temp_dir_.path() / file_name);
         output << text;
     }
 
     void write_binary_file(std::string_view file_name, std::span<const std::byte> bytes) {
-        std::ofstream output(model_dir_ / file_name, std::ios::binary);
+        std::ofstream output(temp_dir_.path() / file_name, std::ios::binary);
         output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     }
 
@@ -80,7 +71,7 @@ class HfModelFilesTest : public ::testing::Test {
     }
 
     const std::filesystem::path& model_dir() const {
-        return model_dir_;
+        return temp_dir_.path();
     }
 
   private:
@@ -90,7 +81,7 @@ class HfModelFilesTest : public ::testing::Test {
         }
     }
 
-    std::filesystem::path model_dir_;
+    TestTempDir temp_dir_{"cppinf-hf-model-files-test"};
 };
 
 TEST_F(HfModelFilesTest, GivenValidDirectory_WhenResolving_ThenExpectedFilesAreReturned) {

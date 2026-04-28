@@ -95,6 +95,7 @@ if(BUILD_TESTING)
     )
     target_include_directories(cppinf_tests PRIVATE
         ${PROJECT_SOURCE_DIR}/src
+        ${PROJECT_SOURCE_DIR}/tests
     )
     target_link_libraries(cppinf_tests PRIVATE CLI11::CLI11 fmt::fmt GTest::gtest_main nlohmann_json::nlohmann_json)
 
