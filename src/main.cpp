@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
         args.push_back(argv[index]);
     }
 
-    const cppinf::cli::CliResult result = cppinf::cli::run(args);
+    const auto result = cppinf::cli::run(args);
     if (result.exit_code == 0) {
         fmt::print("{}", result.output);
     } else {

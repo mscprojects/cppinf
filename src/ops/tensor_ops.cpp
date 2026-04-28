@@ -65,10 +65,10 @@ tensors::Tensor transpose_2d(const tensors::TensorView& input) {
         const std::size_t cols = checked_dim_to_size(dims[1], "transpose_2d cols");
         const std::size_t element_size = tensors::element_size_bytes(input.tensor_info().dtype);
 
-        tensors::Tensor result = detail::make_result_tensor(
-            "transpose_2d_result", input.tensor_info().dtype,
-            tensors::Shape({checked_size_to_dim(cols, "transpose_2d output cols"),
-                            checked_size_to_dim(rows, "transpose_2d output rows")}));
+        auto result =
+            detail::make_result_tensor("transpose_2d_result", input.tensor_info().dtype,
+                                       tensors::Shape({checked_size_to_dim(cols, "transpose_2d output cols"),
+                                                       checked_size_to_dim(rows, "transpose_2d output rows")}));
 
         for (std::size_t row = 0; row < rows; ++row) {
             for (std::size_t col = 0; col < cols; ++col) {
@@ -90,8 +90,8 @@ tensors::Tensor transpose_2d(const tensors::TensorView& input) {
     const dnnl::memory::dims src_strides = {1, transposed_dims[0]};
     const dnnl::memory::dims dst_strides = {transposed_dims[1], 1};
 
-    tensors::Tensor result =
-        detail::make_result_tensor("transpose_2d_result", input.tensor_info().dtype, tensors::Shape({dims[1], dims[0]}));
+    auto result = detail::make_result_tensor("transpose_2d_result", input.tensor_info().dtype,
+                                             tensors::Shape({dims[1], dims[0]}));
     const dnnl::memory::data_type data_type = detail::to_dnnl_dtype(input.tensor_info().dtype);
     dnnl::memory::desc src_desc(transposed_dims, data_type, src_strides);
     dnnl::memory::desc dst_desc(transposed_dims, data_type, dst_strides);

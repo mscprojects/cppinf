@@ -65,7 +65,7 @@ CliResult run(std::span<const std::string_view> args) {
     tensor_limit_option->check(CLI::PositiveNumber);
     all_tensors_option->excludes(tensor_limit_option);
 
-    std::vector<std::string> owned_args = detail::to_owned_args(args);
+    auto owned_args = detail::to_owned_args(args);
     std::vector<char*> argv;
     argv.reserve(owned_args.size());
     for (std::string& arg : owned_args) {
@@ -79,8 +79,8 @@ CliResult run(std::span<const std::string_view> args) {
     }
 
     if (inspect_hf_subcommand->parsed()) {
-        const std::size_t tensor_limit = inspect_hf_options.show_all_tensors ? std::numeric_limits<std::size_t>::max()
-                                                                             : inspect_hf_options.tensor_limit;
+        const auto tensor_limit = inspect_hf_options.show_all_tensors ? std::numeric_limits<std::size_t>::max()
+                                                                      : inspect_hf_options.tensor_limit;
         const auto summary = loaders::hf::load_model_summary(inspect_hf_options.model_dir, tensor_limit);
         return CliResult{
             .exit_code = 0,

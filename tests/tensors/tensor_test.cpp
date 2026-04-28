@@ -90,8 +90,8 @@ TEST_F(TensorTest, GivenMatchingBytes_WhenCreatingTensorView_ThenViewExposesMeta
 }
 
 TEST_F(TensorTest, GivenOwnedTensor_WhenQueryingView_ThenTensorViewMatchesStorage) {
-    const Tensor tensor = make_owned_tensor();
-    const TensorView tensor_view = tensor.view();
+    const auto tensor = make_owned_tensor();
+    const auto tensor_view = tensor.view();
 
     EXPECT_EQ(std::size_t{16}, tensor.byte_size());
     EXPECT_EQ(std::size_t{16}, tensor_view.byte_size());

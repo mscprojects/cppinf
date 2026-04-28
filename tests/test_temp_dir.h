@@ -13,8 +13,7 @@
 class TestTempDir {
   public:
     explicit TestTempDir(std::string_view prefix) {
-        const std::filesystem::path dir_template =
-            std::filesystem::temp_directory_path() / fmt::format("{}-XXXXXX", prefix);
+        const auto dir_template = std::filesystem::temp_directory_path() / fmt::format("{}-XXXXXX", prefix);
         std::string template_text = dir_template.string();
 
         std::vector<char> buffer(template_text.begin(), template_text.end());

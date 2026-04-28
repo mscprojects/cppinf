@@ -58,7 +58,7 @@ class OpsTest : public ::testing::Test {
         std::vector<std::byte> bytes(values.size() * sizeof(std::uint16_t));
         std::size_t index = 0;
         for (const float value : values) {
-            const std::uint16_t bits = float_to_bfloat16_bits(value);
+            const auto bits = float_to_bfloat16_bits(value);
             std::memcpy(bytes.data() + index * sizeof(std::uint16_t), &bits, sizeof(std::uint16_t));
             ++index;
         }
@@ -119,7 +119,7 @@ class OpsTest : public ::testing::Test {
 
     void expect_float_values_near(const TensorView& tensor_view, std::initializer_list<float> expected,
                                   float tolerance) const {
-        const std::vector<float> actual_values = read_float_values(tensor_view);
+        const auto actual_values = read_float_values(tensor_view);
         ASSERT_EQ(expected.size(), actual_values.size());
 
         std::size_t index = 0;
@@ -131,47 +131,47 @@ class OpsTest : public ::testing::Test {
 };
 
 TEST_F(OpsTest, GivenMatchingTensors_WhenAdding_ThenElementwiseSumIsReturned) {
-    const Tensor lhs = make_f32_tensor("lhs", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    const Tensor rhs = make_f32_tensor("rhs", {2, 2}, {10.0f, 20.0f, 30.0f, 40.0f});
-    const Tensor expected = make_f32_tensor("add_result", {2, 2}, {11.0f, 22.0f, 33.0f, 44.0f});
+    const auto lhs = make_f32_tensor("lhs", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto rhs = make_f32_tensor("rhs", {2, 2}, {10.0f, 20.0f, 30.0f, 40.0f});
+    const auto expected = make_f32_tensor("add_result", {2, 2}, {11.0f, 22.0f, 33.0f, 44.0f});
 
     EXPECT_EQ(expected, add(lhs.view(), rhs.view()));
 }
 
 TEST_F(OpsTest, GivenMatchingTensors_WhenMultiplying_ThenElementwiseProductIsReturned) {
-    const Tensor lhs = make_f32_tensor("lhs", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    const Tensor rhs = make_f32_tensor("rhs", {2, 2}, {10.0f, 20.0f, 30.0f, 40.0f});
-    const Tensor expected = make_f32_tensor("mul_result", {2, 2}, {10.0f, 40.0f, 90.0f, 160.0f});
+    const auto lhs = make_f32_tensor("lhs", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto rhs = make_f32_tensor("rhs", {2, 2}, {10.0f, 20.0f, 30.0f, 40.0f});
+    const auto expected = make_f32_tensor("mul_result", {2, 2}, {10.0f, 40.0f, 90.0f, 160.0f});
 
     EXPECT_EQ(expected, mul(lhs.view(), rhs.view()));
 }
 
 TEST_F(OpsTest, GivenCompatibleMatrices_WhenMultiplying_ThenMatmulResultIsReturned) {
-    const Tensor lhs = make_f32_tensor("lhs", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    const Tensor rhs = make_f32_tensor("rhs", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
-    const Tensor expected = make_f32_tensor("matmul_result", {2, 2}, {58.0f, 64.0f, 139.0f, 154.0f});
+    const auto lhs = make_f32_tensor("lhs", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    const auto rhs = make_f32_tensor("rhs", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+    const auto expected = make_f32_tensor("matmul_result", {2, 2}, {58.0f, 64.0f, 139.0f, 154.0f});
 
     EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
 }
 
 TEST_F(OpsTest, GivenF32Tensor_WhenCastingToBf16_ThenExpectedBitsAreReturned) {
-    const Tensor input = make_f32_tensor("input", {2, 2}, {1.5f, -2.25f, 0.5f, -0.75f});
-    const Tensor expected = make_bf16_bits_tensor("cast_result", {2, 2}, {0x3fc0U, 0xc010U, 0x3f00U, 0xbf40U});
+    const auto input = make_f32_tensor("input", {2, 2}, {1.5f, -2.25f, 0.5f, -0.75f});
+    const auto expected = make_bf16_bits_tensor("cast_result", {2, 2}, {0x3fc0U, 0xc010U, 0x3f00U, 0xbf40U});
 
     EXPECT_EQ(expected, cast(input.view(), DType::BF16));
 }
 
 TEST_F(OpsTest, GivenBf16Tensor_WhenCastingToF32_ThenExpectedValuesAreReturned) {
-    const Tensor input = make_bf16_bits_tensor("input", {2, 2}, {0x3fc0U, 0xc010U, 0x3f00U, 0xbf40U});
-    const Tensor expected = make_f32_tensor("cast_result", {2, 2}, {1.5f, -2.25f, 0.5f, -0.75f});
+    const auto input = make_bf16_bits_tensor("input", {2, 2}, {0x3fc0U, 0xc010U, 0x3f00U, 0xbf40U});
+    const auto expected = make_f32_tensor("cast_result", {2, 2}, {1.5f, -2.25f, 0.5f, -0.75f});
 
     EXPECT_EQ(expected, cast(input.view(), DType::F32));
 }
 
 TEST_F(OpsTest, GivenTensorView_WhenReshaping_ThenMetadataChangesOnly) {
-    const Tensor input = make_f32_tensor("input", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto input = make_f32_tensor("input", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
 
-    const TensorView reshaped = reshape(input.view(), Shape({4}));
+    const auto reshaped = reshape(input.view(), Shape({4}));
 
     EXPECT_EQ(std::string("input"), reshaped.tensor_info().name);
     EXPECT_EQ(DType::F32, reshaped.tensor_info().dtype);
@@ -181,22 +181,22 @@ TEST_F(OpsTest, GivenTensorView_WhenReshaping_ThenMetadataChangesOnly) {
 }
 
 TEST_F(OpsTest, GivenIncompatibleShape_WhenReshaping_ThenItThrows) {
-    const Tensor input = make_f32_tensor("input", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto input = make_f32_tensor("input", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
 
     EXPECT_THROW(static_cast<void>(reshape(input.view(), Shape({3}))), std::invalid_argument);
 }
 
 TEST_F(OpsTest, GivenRank2Tensor_WhenTransposing_ThenExpectedResultIsReturned) {
-    const Tensor input = make_f32_tensor("input", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    const Tensor expected = make_f32_tensor("transpose_2d_result", {3, 2}, {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f});
+    const auto input = make_f32_tensor("input", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    const auto expected = make_f32_tensor("transpose_2d_result", {3, 2}, {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f});
 
     EXPECT_EQ(expected, transpose_2d(input.view()));
 }
 
 TEST_F(OpsTest, GivenTensorView_WhenNarrowingFirstDimension_ThenSubspanIsReturned) {
-    const Tensor input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    const auto input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
-    const TensorView narrowed = narrow(input.view(), 0, 1, 2);
+    const auto narrowed = narrow(input.view(), 0, 1, 2);
 
     EXPECT_EQ(std::string("input"), narrowed.tensor_info().name);
     EXPECT_EQ(Shape({2, 2}), narrowed.tensor_info().shape);
@@ -206,23 +206,23 @@ TEST_F(OpsTest, GivenTensorView_WhenNarrowingFirstDimension_ThenSubspanIsReturne
 }
 
 TEST_F(OpsTest, GivenNonZeroDimension_WhenNarrowing_ThenItThrows) {
-    const Tensor input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    const auto input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
     EXPECT_THROW(static_cast<void>(narrow(input.view(), 1, 0, 1)), std::invalid_argument);
 }
 
 TEST_F(OpsTest, GivenMatchingBf16Tensors_WhenAdding_ThenElementwiseSumIsReturned) {
-    const Tensor lhs = make_bf16_tensor("lhs", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    const Tensor rhs = make_bf16_tensor("rhs", {2, 2}, {10.0f, 20.0f, 30.0f, 40.0f});
-    const Tensor expected = make_bf16_tensor("add_result", {2, 2}, {11.0f, 22.0f, 33.0f, 44.0f});
+    const auto lhs = make_bf16_tensor("lhs", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto rhs = make_bf16_tensor("rhs", {2, 2}, {10.0f, 20.0f, 30.0f, 40.0f});
+    const auto expected = make_bf16_tensor("add_result", {2, 2}, {11.0f, 22.0f, 33.0f, 44.0f});
 
     EXPECT_EQ(expected, add(lhs.view(), rhs.view()));
 }
 
 TEST_F(OpsTest, GivenCompatibleBf16Matrices_WhenMultiplying_ThenMatmulResultIsReturned) {
-    const Tensor lhs = make_bf16_tensor("lhs", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    const Tensor rhs = make_bf16_tensor("rhs", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
-    const Tensor expected = make_bf16_tensor("matmul_result", {2, 2}, {58.0f, 64.0f, 139.0f, 154.0f});
+    const auto lhs = make_bf16_tensor("lhs", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    const auto rhs = make_bf16_tensor("rhs", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+    const auto expected = make_bf16_tensor("matmul_result", {2, 2}, {58.0f, 64.0f, 139.0f, 154.0f});
 
     EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
 }
@@ -235,9 +235,9 @@ TEST_F(OpsTest, GivenTorchOracleBf16Matrices_WhenMultiplying_ThenExpectedResultI
     // rhs = torch.tensor([[2.0, -1.0], [0.25, 3.5], [-4.0, 1.5]], dtype=torch.bfloat16)
     // print((lhs @ rhs).float())
     // PY
-    const Tensor lhs = make_bf16_tensor("lhs", {2, 3}, {1.0f, -2.5f, 3.25f, 4.5f, 0.5f, -1.75f});
-    const Tensor rhs = make_bf16_tensor("rhs", {3, 2}, {2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f});
-    const Tensor expected = make_bf16_tensor("matmul_result", {2, 2}, {-11.625f, -4.875f, 16.125f, -5.375f});
+    const auto lhs = make_bf16_tensor("lhs", {2, 3}, {1.0f, -2.5f, 3.25f, 4.5f, 0.5f, -1.75f});
+    const auto rhs = make_bf16_tensor("rhs", {3, 2}, {2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f});
+    const auto expected = make_bf16_tensor("matmul_result", {2, 2}, {-11.625f, -4.875f, 16.125f, -5.375f});
 
     EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
 }
@@ -250,9 +250,9 @@ TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingSilu_ThenExpectedValuesAr
     // x = torch.tensor([[-1.5, -0.25, 0.5, 2.0], [3.0, -4.5, 1.25, 0.75]], dtype=torch.bfloat16)
     // print(F.silu(x).float())
     // PY
-    const Tensor input = make_bf16_tensor("input", {2, 4}, {-1.5f, -0.25f, 0.5f, 2.0f, 3.0f, -4.5f, 1.25f, 0.75f});
+    const auto input = make_bf16_tensor("input", {2, 4}, {-1.5f, -0.25f, 0.5f, 2.0f, 3.0f, -4.5f, 1.25f, 0.75f});
 
-    const Tensor result = silu(input.view());
+    const auto result = silu(input.view());
 
     EXPECT_EQ(std::string("silu_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
@@ -269,9 +269,9 @@ TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingSoftmaxLastDim_ThenExpect
     // x = torch.tensor([[1.0, -2.5, 3.25, 0.75], [4.5, 0.5, -1.75, 2.25]], dtype=torch.bfloat16)
     // print(torch.softmax(x, dim=-1).float())
     // PY
-    const Tensor input = make_bf16_tensor("input", {2, 4}, {1.0f, -2.5f, 3.25f, 0.75f, 4.5f, 0.5f, -1.75f, 2.25f});
+    const auto input = make_bf16_tensor("input", {2, 4}, {1.0f, -2.5f, 3.25f, 0.75f, 4.5f, 0.5f, -1.75f, 2.25f});
 
-    const Tensor result = softmax_last_dim(input.view());
+    const auto result = softmax_last_dim(input.view());
 
     EXPECT_EQ(std::string("softmax_last_dim_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
@@ -291,18 +291,17 @@ TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingRmsNorm_ThenExpectedValue
     // eps = 1e-5
     // print((x * torch.rsqrt(x.square().mean(dim=-1, keepdim=True) + eps) * w).to(torch.bfloat16).float())
     // PY
-    const Tensor input = make_bf16_tensor("input", {2, 4}, {-1.5f, -0.25f, 0.5f, 2.0f, 3.0f, -4.5f, 1.25f, 0.75f});
-    const Tensor weight = make_bf16_tensor("weight", {4}, {1.0f, 0.5f, -1.5f, 2.0f});
+    const auto input = make_bf16_tensor("input", {2, 4}, {-1.5f, -0.25f, 0.5f, 2.0f, 3.0f, -4.5f, 1.25f, 0.75f});
+    const auto weight = make_bf16_tensor("weight", {4}, {1.0f, 0.5f, -1.5f, 2.0f});
 
-    const Tensor result = rms_norm(input.view(), weight.view(), 1e-5f);
+    const auto result = rms_norm(input.view(), weight.view(), 1e-5f);
 
     EXPECT_EQ(std::string("rms_norm_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
     EXPECT_EQ(Shape({2, 4}), result.tensor_info().shape);
     expect_float_values_near(
         result.view(),
-        {-1.171875f, -0.09765625f, -0.5859375f, 3.125f, 1.0703125f, -0.8046875f, -0.66796875f, 0.53515625f},
-        1e-6f);
+        {-1.171875f, -0.09765625f, -0.5859375f, 3.125f, 1.0703125f, -0.8046875f, -0.66796875f, 0.53515625f}, 1e-6f);
 }
 
 TEST_F(OpsTest, GivenUnsupportedTensorType_WhenAdding_ThenItThrows) {

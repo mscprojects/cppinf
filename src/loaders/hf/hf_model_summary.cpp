@@ -12,12 +12,12 @@
 namespace cppinf::loaders::hf {
 
 HfModelSummary load_model_summary(const std::filesystem::path& model_dir, std::size_t tensor_preview_limit) {
-    const HfModelFiles model_files = HfModelFiles::from_dir(model_dir);
-    const HfConfig config = model_files.load_config();
-    const files::SafetensorsFile weights = model_files.load_weights();
+    const auto model_files = HfModelFiles::from_dir(model_dir);
+    const auto config = model_files.load_config();
+    const auto weights = model_files.load_weights();
 
     const auto& tensors = weights.tensors();
-    const std::size_t preview_size = std::min(tensor_preview_limit, tensors.size());
+    const auto preview_size = std::min(tensor_preview_limit, tensors.size());
     std::vector<tensors::TensorInfo> tensor_preview(tensors.begin(), tensors.begin() + preview_size);
 
     return HfModelSummary{

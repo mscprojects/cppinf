@@ -26,7 +26,7 @@ std::size_t read_size(const json& value, std::string_view field_name) {
         throw std::invalid_argument(fmt::format("HF config field '{}' must be an integer.", field_name));
     }
 
-    const std::int64_t parsed_value = value.get<std::int64_t>();
+    const auto parsed_value = value.get<std::int64_t>();
     if (parsed_value < 0) {
         throw std::invalid_argument(fmt::format("HF config field '{}' must be non-negative.", field_name));
     }

@@ -24,9 +24,9 @@ std::size_t Shape::rank() const {
 }
 
 std::size_t Shape::num_elements() const {
-    std::size_t num_elements = 1;
+    auto num_elements = std::size_t{1};
     for (const std::int64_t dim : dims_) {
-        const std::size_t dim_size = static_cast<std::size_t>(dim);
+        const auto dim_size = static_cast<std::size_t>(dim);
         if (dim_size != 0 && num_elements > std::numeric_limits<std::size_t>::max() / dim_size) {
             throw std::overflow_error("Shape element count overflowed.");
         }
