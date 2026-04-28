@@ -64,10 +64,18 @@ set(CPPINF_SOURCES
     src/loaders/hf/hf_model_files.h
     src/loaders/hf/hf_model_summary.cpp
     src/loaders/hf/hf_model_summary.h
+    src/ops/elementwise_ops.cpp
+    src/ops/elementwise_ops.h
+    src/ops/matmul.cpp
+    src/ops/matmul.h
     src/tensors/dtype.cpp
     src/tensors/dtype.h
+    src/tensors/bfloat16.cpp
+    src/tensors/bfloat16.h
     src/tensors/shape.cpp
     src/tensors/shape.h
+    src/tensors/tensor.cpp
+    src/tensors/tensor.h
     src/tensors/tensor_info.cpp
     src/tensors/tensor_info.h
     src/tensors/tensor_view.cpp
@@ -91,6 +99,7 @@ if(BUILD_TESTING)
         tests/loaders/hf/hf_config_test.cpp
         tests/loaders/hf/hf_model_files_test.cpp
         tests/loaders/hf/hf_model_summary_test.cpp
+        tests/ops/ops_test.cpp
         tests/tensors/tensor_test.cpp
     )
     target_include_directories(cppinf_tests PRIVATE

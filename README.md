@@ -6,10 +6,12 @@ Right now it is intentionally minimal:
 
 - `src/files/`
 - `src/loaders/hf/`
+- `src/ops/`
 - `src/main.cpp`
 - `src/tensors/`
 - `tests/files/`
 - `tests/loaders/hf/`
+- `tests/ops/`
 - `tests/tensors/`
 - `CMakeLists.txt`
 - `.clang-format`
@@ -44,8 +46,10 @@ That runs the GoogleTest suite through CTest.
 
 `src/loaders/hf/` contains Hugging Face-specific directory and config loaders.
 
-`src/tensors/` contains a small metadata-first tensor scaffold: dtypes, shapes,
-tensor info, tensor views, and readable `to_string(...)` helpers.
+`src/ops/` contains the first CPU reference tensor operations.
+
+`src/tensors/` contains the tensor scaffolding: dtypes, shapes, tensor info,
+tensor views, an owning tensor, and readable `to_string(...)` helpers.
 
 `tests/` mirrors the `src/` layout.
 
