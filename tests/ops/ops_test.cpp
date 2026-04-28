@@ -104,6 +104,21 @@ TEST_F(OpsTest, GivenCompatibleBf16Matrices_WhenMultiplying_ThenMatmulResultIsRe
     EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
 }
 
+TEST_F(OpsTest, GivenTorchOracleBf16Matrices_WhenMultiplying_ThenExpectedResultIsReturned) {
+    // Golden values generated offline with:
+    // uv run --with torch==2.11.0 python - <<'PY'
+    // import torch
+    // lhs = torch.tensor([[1.0, -2.5, 3.25], [4.5, 0.5, -1.75]], dtype=torch.bfloat16)
+    // rhs = torch.tensor([[2.0, -1.0], [0.25, 3.5], [-4.0, 1.5]], dtype=torch.bfloat16)
+    // print((lhs @ rhs).float())
+    // PY
+    const Tensor lhs = make_bf16_tensor("lhs", {2, 3}, {1.0f, -2.5f, 3.25f, 4.5f, 0.5f, -1.75f});
+    const Tensor rhs = make_bf16_tensor("rhs", {3, 2}, {2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f});
+    const Tensor expected = make_bf16_tensor("matmul_result", {2, 2}, {-11.625f, -4.875f, 16.125f, -5.375f});
+
+    EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
+}
+
 TEST_F(OpsTest, GivenUnsupportedTensorType_WhenAdding_ThenItThrows) {
     const Tensor lhs(
         TensorInfo{
