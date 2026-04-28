@@ -32,11 +32,28 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(fmt spdlog)
 
-add_executable(cppinf src/main.cpp)
+add_executable(cppinf
+  src/greeting.cpp
+  src/greeting.h
+  src/main.cpp
+)
 target_link_libraries(cppinf PRIVATE fmt::fmt spdlog::spdlog)
 
 if(BUILD_TESTING)
+  add_executable(cppinf_tests
+    src/greeting.cpp
+    src/greeting.h
+    tests/greeting_test.cpp
+    tests/test.h
+  )
+  target_include_directories(cppinf_tests PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/tests
+  )
+  target_link_libraries(cppinf_tests PRIVATE fmt::fmt)
+
   add_test(NAME cppinf_hello COMMAND cppinf)
+  add_test(NAME cppinf_tests COMMAND cppinf_tests)
   set_tests_properties(cppinf_hello PROPERTIES
     PASS_REGULAR_EXPRESSION "Hello, cppinf!"
   )

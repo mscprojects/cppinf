@@ -4,7 +4,11 @@ A small C++/CMake scaffold for a future LLM inference project.
 
 Right now it is intentionally minimal:
 
+- `src/greeting.cpp`
+- `src/greeting.h`
 - `src/main.cpp`
+- `tests/greeting_test.cpp`
+- `tests/test.h`
 - `CMakeLists.txt`
 - `justfile`
 - `.gitignore`
@@ -29,6 +33,9 @@ cmake --build build
 ```sh
 just test
 ```
+
+That runs both the hello-world smoke test and the small test executable under
+CTest.
 
 ## Run
 
