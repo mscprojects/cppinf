@@ -16,7 +16,7 @@ Right now it is intentionally minimal:
 - `justfile`
 - `.gitignore`
 
-The project fetches `fmt`, `spdlog`, and `GoogleTest` during CMake configure.
+The project fetches `CLI11`, `fmt`, `spdlog`, and `GoogleTest` during CMake configure.
 
 ## Build
 
@@ -74,4 +74,16 @@ To inspect a Hugging Face model directory:
 
 ```sh
 just run inspect hf ~/Sources/models/Qwen3-0.6B-Base/
+```
+
+To show every tensor in the weights file:
+
+```sh
+just run inspect hf ~/Sources/models/Qwen3-0.6B-Base/ --all
+```
+
+To limit the tensor listing:
+
+```sh
+just run inspect hf ~/Sources/models/Qwen3-0.6B-Base/ --limit 32
 ```

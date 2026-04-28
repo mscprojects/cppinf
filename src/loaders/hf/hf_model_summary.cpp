@@ -46,7 +46,12 @@ std::string format_model_summary(const HfModelSummary& summary) {
     fmt::format_to(std::back_inserter(buffer), "EOS token id: {}\n", summary.config.eos_token_id);
     fmt::format_to(std::back_inserter(buffer), "Metadata entries: {}\n", summary.metadata_count);
     fmt::format_to(std::back_inserter(buffer), "Tensor count: {}\n", summary.tensor_count);
-    fmt::format_to(std::back_inserter(buffer), "Tensor preview:\n");
+    if (summary.tensor_preview.size() == summary.tensor_count) {
+        fmt::format_to(std::back_inserter(buffer), "Tensors:\n");
+    } else {
+        fmt::format_to(std::back_inserter(buffer), "Tensor preview (showing {} of {}):\n",
+                       summary.tensor_preview.size(), summary.tensor_count);
+    }
 
     for (const auto& tensor_info : summary.tensor_preview) {
         fmt::format_to(std::back_inserter(buffer), "  - {} | dtype={} | shape={} | offset={} | bytes={}\n",

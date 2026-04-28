@@ -139,6 +139,22 @@ TEST_F(HfModelSummaryTest, GivenValidDirectory_WhenLoadingSummary_ThenExpectedSu
     EXPECT_EQ(expected, summary);
 }
 
+TEST_F(HfModelSummaryTest, GivenTensorLimit_WhenLoadingSummary_ThenTensorPreviewIsTrimmed) {
+    write_required_hf_files();
+
+    const HfModelSummary summary = load_model_summary(model_dir(), 1);
+    const std::vector<TensorInfo> expected{
+        TensorInfo{
+            .name = "embed",
+            .dtype = DType::BF16,
+            .shape = Shape({2, 4}),
+            .byte_offset = 0,
+        },
+    };
+
+    EXPECT_EQ(expected, summary.tensor_preview);
+}
+
 TEST_F(HfModelSummaryTest, GivenSummary_WhenFormatting_ThenReadableTextIsProduced) {
     const HfModelSummary summary{
         .model_dir = "/tmp/model",
@@ -185,7 +201,7 @@ TEST_F(HfModelSummaryTest, GivenSummary_WhenFormatting_ThenReadableTextIsProduce
                           "EOS token id: 151643\n"
                           "Metadata entries: 1\n"
                           "Tensor count: 2\n"
-                          "Tensor preview:\n"
+                          "Tensor preview (showing 1 of 2):\n"
                           "  - embed | dtype=bf16 | shape=[2, 4] | offset=0 | bytes=16\n"),
               format_model_summary(summary));
 }
