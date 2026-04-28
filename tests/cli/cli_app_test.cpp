@@ -53,13 +53,14 @@ class CliAppTest : public ::testing::Test {
         write_text_file("tokenizer.json", R"({"version":"1.0"})");
         write_text_file("tokenizer_config.json", R"({"tokenizer_class":"Qwen2Tokenizer"})");
 
-        const std::array<std::byte, 4> tensor_data{
-            std::byte{0x00},
-            std::byte{0x01},
-            std::byte{0x02},
-            std::byte{0x03},
+        const std::array<std::byte, 20> tensor_data{
+            std::byte{0x10}, std::byte{0x11}, std::byte{0x12}, std::byte{0x13}, std::byte{0x14},
+            std::byte{0x15}, std::byte{0x16}, std::byte{0x17}, std::byte{0x18}, std::byte{0x19},
+            std::byte{0x1a}, std::byte{0x1b}, std::byte{0x1c}, std::byte{0x1d}, std::byte{0x1e},
+            std::byte{0x1f}, std::byte{0x20}, std::byte{0x21}, std::byte{0x22}, std::byte{0x23},
         };
-        const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
+        const std::string header =
+            R"({"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"token_ids":{"dtype":"U8","shape":[4],"data_offsets":[16,20]}})";
         write_binary_file("model.safetensors", make_safetensors_file_bytes(header, tensor_data));
     }
 
@@ -103,7 +104,7 @@ TEST_F(CliAppTest, GivenInvalidArguments_WhenRunning_ThenUsageIsReturned) {
     const std::string_view args[] = {"inspect"};
     const CliResult expected{
         .exit_code = 1,
-        .output = "Usage:\n  cppinf\n  cppinf inspect hf <model-dir>\n",
+        .output = "Usage:\n  cppinf\n  cppinf inspect hf <model-dir> [--all] [--limit <count>]\n",
     };
 
     EXPECT_EQ(expected, run(args));
@@ -120,4 +121,30 @@ TEST_F(CliAppTest, GivenInspectHfArguments_WhenRunning_ThenFormattedSummaryIsRet
     EXPECT_EQ(std::string::npos, result.output.find("Usage:"));
     EXPECT_NE(std::string::npos, result.output.find("HF model directory:"));
     EXPECT_NE(std::string::npos, result.output.find(model_dir_path));
+}
+
+TEST_F(CliAppTest, GivenInspectHfLimit_WhenRunning_ThenTensorPreviewIsLimited) {
+    write_required_hf_files();
+    const std::string model_dir_path = model_dir().string();
+    const std::string_view args[] = {"inspect", "hf", model_dir_path, "--limit", "1"};
+
+    const CliResult result = run(args);
+
+    EXPECT_EQ(0, result.exit_code);
+    EXPECT_NE(std::string::npos, result.output.find("Tensor preview (showing 1 of 2):"));
+    EXPECT_NE(std::string::npos, result.output.find("embed"));
+    EXPECT_EQ(std::string::npos, result.output.find("token_ids"));
+}
+
+TEST_F(CliAppTest, GivenInspectHfAll_WhenRunning_ThenAllTensorsAreShown) {
+    write_required_hf_files();
+    const std::string model_dir_path = model_dir().string();
+    const std::string_view args[] = {"inspect", "hf", model_dir_path, "--all"};
+
+    const CliResult result = run(args);
+
+    EXPECT_EQ(0, result.exit_code);
+    EXPECT_NE(std::string::npos, result.output.find("Tensors:\n"));
+    EXPECT_NE(std::string::npos, result.output.find("embed"));
+    EXPECT_NE(std::string::npos, result.output.find("token_ids"));
 }

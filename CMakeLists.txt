@@ -22,6 +22,12 @@ set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
+  CLI11
+  GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+  GIT_TAG v2.4.2
+)
+
+FetchContent_Declare(
   fmt
   GIT_REPOSITORY https://github.com/fmtlib/fmt.git
   GIT_TAG 11.1.4
@@ -45,7 +51,7 @@ FetchContent_Declare(
   GIT_TAG v1.15.3
 )
 
-FetchContent_MakeAvailable(fmt googletest nlohmann_json spdlog)
+FetchContent_MakeAvailable(CLI11 fmt googletest nlohmann_json spdlog)
 
 set(CPPINF_SOURCES
     src/cli/cli_app.cpp
@@ -61,21 +67,21 @@ set(CPPINF_SOURCES
     src/tensors/dtype.cpp
     src/tensors/dtype.h
     src/tensors/shape.cpp
-  src/tensors/shape.h
-  src/tensors/tensor_info.cpp
-  src/tensors/tensor_info.h
-  src/tensors/tensor_view.cpp
-  src/tensors/tensor_view.h
+    src/tensors/shape.h
+    src/tensors/tensor_info.cpp
+    src/tensors/tensor_info.h
+    src/tensors/tensor_view.cpp
+    src/tensors/tensor_view.h
 )
 
 add_executable(cppinf
-  ${CPPINF_SOURCES}
-  src/main.cpp
+    ${CPPINF_SOURCES}
+    src/main.cpp
 )
 target_include_directories(cppinf PRIVATE
-  ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/src
 )
-target_link_libraries(cppinf PRIVATE fmt::fmt nlohmann_json::nlohmann_json spdlog::spdlog)
+target_link_libraries(cppinf PRIVATE CLI11::CLI11 fmt::fmt nlohmann_json::nlohmann_json spdlog::spdlog)
 
 if(BUILD_TESTING)
     add_executable(cppinf_tests
@@ -87,10 +93,10 @@ if(BUILD_TESTING)
         tests/loaders/hf/hf_model_summary_test.cpp
         tests/tensors/tensor_test.cpp
     )
-  target_include_directories(cppinf_tests PRIVATE
-    ${PROJECT_SOURCE_DIR}/src
-  )
-  target_link_libraries(cppinf_tests PRIVATE fmt::fmt GTest::gtest_main nlohmann_json::nlohmann_json)
+    target_include_directories(cppinf_tests PRIVATE
+        ${PROJECT_SOURCE_DIR}/src
+    )
+    target_link_libraries(cppinf_tests PRIVATE CLI11::CLI11 fmt::fmt GTest::gtest_main nlohmann_json::nlohmann_json)
 
-  gtest_discover_tests(cppinf_tests)
+    gtest_discover_tests(cppinf_tests)
 endif()
