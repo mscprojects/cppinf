@@ -27,7 +27,8 @@ Create tests that are deterministic, readable, and useful for debugging tensor m
 - Focused tests under `tests/` that mirror `src/`.
 - Small readable literals for simple cases.
 - Committed golden values for oracle-based numerical tests.
-- Short inline comments that show how oracle values were generated.
+- Checked-in `*_oracle.py` generators next to the relevant tests when offline ground truth is needed.
+- Short comments that point to the generator file instead of pasting long inline snippets.
 
 ## Workflow
 
@@ -35,9 +36,10 @@ Create tests that are deterministic, readable, and useful for debugging tensor m
 2. Prefer whole-object equality with `operator==` when practical.
 3. For tensor math primitives, use explicit hand-written expected values first when the numbers stay readable.
 4. When the math becomes tedious or error-prone, generate oracle values offline with pinned PyTorch.
-5. Paste the exact generator snippet into the test as a short comment directly above the golden values.
-6. Commit only the C++ test data and comments. Do not add a runtime PyTorch dependency to the project.
-7. Keep BF16 comparisons deterministic by encoding fixed input literals and asserting on committed golden outputs.
+5. Put the oracle generator code in a checked-in `*_oracle.py` file next to the relevant test file.
+6. Keep the test comment short, for example by naming the generator file used to refresh the goldens.
+7. Commit the Python generator plus the C++ test data. Do not add a runtime PyTorch dependency to the project.
+8. Keep BF16 comparisons deterministic by encoding fixed input literals and asserting on committed golden outputs.
 
 ## Decision rules
 
