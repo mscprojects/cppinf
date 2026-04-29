@@ -122,7 +122,7 @@ TEST_F(QwenMlpTest, GivenMismatchedDownProjection_WhenApplyingQwenMlp_ThenItThro
     const auto gate_proj_weight = make_f32_tensor(
         "gate_proj_weight", {4, 6}, {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                      0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f});
-    const auto up_proj_weight = gate_proj_weight;
+    const auto& up_proj_weight = gate_proj_weight;
     const auto down_proj_weight =
         make_f32_tensor("down_proj_weight", {6, 5},
                         {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,

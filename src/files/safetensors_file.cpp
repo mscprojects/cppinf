@@ -121,6 +121,8 @@ ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
 
     ParsedSafetensorsHeader parsed_header{
         .tensor_data_offset = tensor_data_offset,
+        .tensor_infos = {},
+        .metadata = {},
     };
 
     for (auto iterator = header.begin(); iterator != header.end(); ++iterator) {

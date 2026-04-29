@@ -90,7 +90,7 @@ class Qwen3RealModelTest : public ::testing::Test {
     std::vector<std::pair<std::size_t, float>> top_k(const std::vector<float>& values, std::size_t k) const {
         std::vector<std::size_t> indices(values.size());
         std::iota(indices.begin(), indices.end(), 0);
-        std::partial_sort(indices.begin(), indices.begin() + k, indices.end(),
+        std::partial_sort(indices.begin(), std::next(indices.begin(), static_cast<std::ptrdiff_t>(k)), indices.end(),
                           [&values](std::size_t lhs, std::size_t rhs) {
                               if (values[lhs] == values[rhs]) {
                                   return lhs < rhs;

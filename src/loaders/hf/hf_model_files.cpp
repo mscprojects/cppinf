@@ -18,7 +18,7 @@ std::filesystem::path require_file(const std::filesystem::path& model_dir, std::
 }
 
 std::optional<std::filesystem::path> optional_file(const std::filesystem::path& model_dir, std::string_view file_name) {
-    const auto path = model_dir / file_name;
+    auto path = model_dir / file_name;
     if (std::filesystem::is_regular_file(path)) {
         return path;
     }

@@ -1,5 +1,5 @@
 build:
-    cmake -S . -B build
+    cmake -S . -B build -D CMAKE_C_COMPILER=clang -D CMAKE_CXX_COMPILER=clang++ -D CPPINF_ENABLE_CLANG_TIDY=ON
     cmake --build build --parallel
 
 run *args: build
@@ -7,6 +7,12 @@ run *args: build
 
 test: build
     ctest --test-dir build --output-on-failure
+
+format:
+    find src tests -type f \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 clang-format -i
+
+format-check:
+    find src tests -type f \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 clang-format --dry-run --Werror
 
 lint:
     find src tests -type f \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 clang-format -i
