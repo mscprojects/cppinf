@@ -40,37 +40,36 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
 
 tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, float scale,
                                              std::size_t past_sequence_length) {
-    if (scores.tensor_info().dtype != tensors::DType::F32 || scores.tensor_info().shape.rank() != 2) {
-        throw std::invalid_argument("scale_and_causal_mask_scores requires a rank-2 f32 tensor.");
+    if (scores.tensor_info().dtype != tensors::DType::F32 || scores.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("scale_and_causal_mask_scores requires a rank-3 f32 tensor.");
     }
 
     const auto& dims = scores.tensor_info().shape.dims();
-    const auto query_sequence_length = checked_positive_dim_to_size(dims[0], "attention query sequence length");
-    const auto key_sequence_length = checked_positive_dim_to_size(dims[1], "attention key sequence length");
+    const auto head_count = checked_positive_dim_to_size(dims[0], "attention head count");
+    const auto query_sequence_length = checked_positive_dim_to_size(dims[1], "attention query sequence length");
+    const auto key_sequence_length = checked_positive_dim_to_size(dims[2], "attention key sequence length");
 
     auto masked_scores = tensors::Tensor::zeros(
         tensors::make_result_tensor_info("causal_attention_scores", tensors::DType::F32, scores.tensor_info().shape));
 
-    // Query position i may only see the cached prefix plus tokens up to i in the current chunk, so future keys become
-    // -inf before softmax.
-    for (std::size_t query_index = 0; query_index < query_sequence_length; ++query_index) {
-        const auto last_allowed_key = past_sequence_length + query_index;
-        for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
-            const auto flat_index = query_index * key_sequence_length + key_index;
-            const auto value =
-                key_index <= last_allowed_key
-                    ? ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) * scale
-                    : -std::numeric_limits<float>::infinity();
-            ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index, value);
+    // Each head shares the same causal rule: query position i may only see the cached prefix plus tokens up to i in the
+    // current chunk, so future keys become -inf before softmax.
+    for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
+        for (std::size_t query_index = 0; query_index < query_sequence_length; ++query_index) {
+            const auto last_allowed_key = past_sequence_length + query_index;
+            for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
+                const auto flat_index =
+                    ((head_index * query_sequence_length) + query_index) * key_sequence_length + key_index;
+                const auto value =
+                    key_index <= last_allowed_key
+                        ? ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) * scale
+                        : -std::numeric_limits<float>::infinity();
+                ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index, value);
+            }
         }
     }
 
     return masked_scores;
-}
-
-void copy_head_output_to_result(const tensors::Tensor& head_output, std::size_t head_index, tensors::Tensor& result) {
-    const auto byte_offset = head_index * head_output.byte_size();
-    std::memcpy(result.mutable_data().data() + byte_offset, head_output.data().data(), head_output.byte_size());
 }
 
 void validate_attention_inputs(const tensors::TensorView& query, const tensors::TensorView& key,
@@ -124,14 +123,7 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
     validate_attention_inputs(query, key, value, past_sequence_length);
 
     const auto& query_dims = query.tensor_info().shape.dims();
-    const auto& key_dims = key.tensor_info().shape.dims();
-    const auto& value_dims = value.tensor_info().shape.dims();
-
-    const auto head_count = static_cast<std::size_t>(query_dims[0]);
-    const auto query_sequence_length = static_cast<std::size_t>(query_dims[1]);
     const auto query_head_size = static_cast<std::size_t>(query_dims[2]);
-    const auto key_sequence_length = static_cast<std::size_t>(key_dims[1]);
-    const auto value_head_size = static_cast<std::size_t>(value_dims[2]);
     const auto score_scale = 1.0f / std::sqrt(static_cast<float>(query_head_size));
 
     std::optional<tensors::Tensor> query_storage;
@@ -146,33 +138,17 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
     const auto value_f32 =
         ops::detail::maybe_cast_to_dtype(value, tensors::DType::F32, value_storage, "causal_self_attention_result");
 
-    auto result_f32 = tensors::Tensor::zeros(
-        tensors::make_result_tensor_info("causal_self_attention_result", tensors::DType::F32,
-                                         tensors::Shape({query_dims[0], query_dims[1], value_dims[2]})));
+    // Keep the head axis batched so oneDNN can build all attention score matrices together:
+    // [heads, seq_q, head_dim] x [heads, head_dim, seq_k] -> [heads, seq_q, seq_k].
+    const auto transposed_key = ops::transpose_last_two_dims(key_f32);
+    const auto attention_scores = ops::matmul(query_f32, transposed_key.view());
+    const auto masked_scores = scale_and_causal_mask_scores(attention_scores.view(), score_scale, past_sequence_length);
+    const auto probabilities = ops::softmax_last_dim(masked_scores.view());
 
-    for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
-        // Slice one head at a time and flatten away the head axis so matmul sees ordinary matrices:
-        // [seq_q, head_dim], [seq_k, head_dim], and [seq_k, value_dim].
-        const auto query_head = ops::reshape(ops::narrow(query_f32, 0, head_index, 1),
-                                             tensors::Shape({static_cast<std::int64_t>(query_sequence_length),
-                                                             static_cast<std::int64_t>(query_head_size)}));
-        const auto key_head = ops::reshape(ops::narrow(key_f32, 0, head_index, 1),
-                                           tensors::Shape({static_cast<std::int64_t>(key_sequence_length),
-                                                           static_cast<std::int64_t>(query_head_size)}));
-        const auto value_head = ops::reshape(ops::narrow(value_f32, 0, head_index, 1),
-                                             tensors::Shape({static_cast<std::int64_t>(key_sequence_length),
-                                                             static_cast<std::int64_t>(value_head_size)}));
-
-        // Q * K^T gives raw scores [seq_q, seq_k], scaling and masking turn them into valid causal scores, softmax
-        // makes them probabilities over keys, and the final matmul with V returns the weighted sum [seq_q, value_dim].
-        const auto transposed_key = ops::transpose_2d(key_head);
-        const auto attention_scores = ops::matmul(query_head, transposed_key.view());
-        const auto masked_scores =
-            scale_and_causal_mask_scores(attention_scores.view(), score_scale, past_sequence_length);
-        const auto probabilities = ops::softmax_last_dim(masked_scores.view());
-        const auto head_output = ops::matmul(probabilities.view(), value_head);
-        copy_head_output_to_result(head_output, head_index, result_f32);
-    }
+    // Apply the attention weights to V for every head in one go:
+    // [heads, seq_q, seq_k] x [heads, seq_k, value_dim] -> [heads, seq_q, value_dim].
+    auto result_f32 = ops::matmul(probabilities.view(), value_f32);
+    result_f32 = tensors::rename_tensor("causal_self_attention_result", result_f32);
 
     return ops::detail::maybe_cast_result(std::move(result_f32), query.tensor_info().dtype,
                                           "causal_self_attention_result");

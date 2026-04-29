@@ -31,6 +31,64 @@ std::int64_t checked_size_to_dim(std::size_t value, std::string_view field_name)
     return static_cast<std::int64_t>(value);
 }
 
+tensors::Tensor transpose_last_two_dims_impl(const tensors::TensorView& input, std::string_view result_name) {
+    if (input.tensor_info().shape.rank() != 2 && input.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("transpose_last_two_dims requires a rank-2 or rank-3 tensor.");
+    }
+
+    const auto& dims = input.tensor_info().shape.dims();
+    std::vector<std::int64_t> output_dims = dims;
+    std::swap(output_dims[output_dims.size() - 2], output_dims[output_dims.size() - 1]);
+
+    auto result =
+        detail::make_result_tensor(result_name, input.tensor_info().dtype, tensors::Shape(std::move(output_dims)));
+    const dnnl::memory::data_type data_type = detail::to_dnnl_dtype(input.tensor_info().dtype);
+
+    if (dims.size() == 2) {
+        const dnnl::memory::dims transposed_dims = {
+            static_cast<dnnl::memory::dim>(dims[1]),
+            static_cast<dnnl::memory::dim>(dims[0]),
+        };
+        const dnnl::memory::dims src_strides = {1, transposed_dims[0]};
+        const dnnl::memory::dims dst_strides = {transposed_dims[1], 1};
+        dnnl::memory::desc src_desc(transposed_dims, data_type, src_strides);
+        dnnl::memory::desc dst_desc(transposed_dims, data_type, dst_strides);
+        dnnl::memory src_memory = detail::make_memory(src_desc, input.data());
+        dnnl::memory dst_memory = detail::make_memory(dst_desc, result.mutable_data());
+        dnnl::stream stream(detail::cpu_engine());
+        dnnl::reorder(src_memory, dst_memory).execute(stream, src_memory, dst_memory);
+        stream.wait();
+        return result;
+    }
+
+    const auto batch_size = checked_dim_to_size(dims[0], "transpose_last_two_dims batch");
+    const auto rows = checked_dim_to_size(dims[1], "transpose_last_two_dims rows");
+    const auto cols = checked_dim_to_size(dims[2], "transpose_last_two_dims cols");
+    const dnnl::memory::dims transposed_dims = {
+        static_cast<dnnl::memory::dim>(batch_size),
+        static_cast<dnnl::memory::dim>(cols),
+        static_cast<dnnl::memory::dim>(rows),
+    };
+    const dnnl::memory::dims src_strides = {
+        static_cast<dnnl::memory::dim>(rows * cols),
+        1,
+        static_cast<dnnl::memory::dim>(cols),
+    };
+    const dnnl::memory::dims dst_strides = {
+        static_cast<dnnl::memory::dim>(rows * cols),
+        static_cast<dnnl::memory::dim>(rows),
+        1,
+    };
+    dnnl::memory::desc src_desc(transposed_dims, data_type, src_strides);
+    dnnl::memory::desc dst_desc(transposed_dims, data_type, dst_strides);
+    dnnl::memory src_memory = detail::make_memory(src_desc, input.data());
+    dnnl::memory dst_memory = detail::make_memory(dst_desc, result.mutable_data());
+    dnnl::stream stream(detail::cpu_engine());
+    dnnl::reorder(src_memory, dst_memory).execute(stream, src_memory, dst_memory);
+    stream.wait();
+    return result;
+}
+
 } // namespace
 
 tensors::Tensor cast(const tensors::TensorView& input, tensors::DType dtype) {
@@ -59,25 +117,11 @@ tensors::Tensor transpose_2d(const tensors::TensorView& input) {
         throw std::invalid_argument("transpose_2d requires a rank-2 tensor.");
     }
 
-    const auto& dims = input.tensor_info().shape.dims();
-    const dnnl::memory::dims transposed_dims = {
-        static_cast<dnnl::memory::dim>(dims[1]),
-        static_cast<dnnl::memory::dim>(dims[0]),
-    };
-    const dnnl::memory::dims src_strides = {1, transposed_dims[0]};
-    const dnnl::memory::dims dst_strides = {transposed_dims[1], 1};
+    return transpose_last_two_dims_impl(input, "transpose_2d_result");
+}
 
-    auto result = detail::make_result_tensor("transpose_2d_result", input.tensor_info().dtype,
-                                             tensors::Shape({dims[1], dims[0]}));
-    const dnnl::memory::data_type data_type = detail::to_dnnl_dtype(input.tensor_info().dtype);
-    dnnl::memory::desc src_desc(transposed_dims, data_type, src_strides);
-    dnnl::memory::desc dst_desc(transposed_dims, data_type, dst_strides);
-    dnnl::memory src_memory = detail::make_memory(src_desc, input.data());
-    dnnl::memory dst_memory = detail::make_memory(dst_desc, result.mutable_data());
-    dnnl::stream stream(detail::cpu_engine());
-    dnnl::reorder(src_memory, dst_memory).execute(stream, src_memory, dst_memory);
-    stream.wait();
-    return result;
+tensors::Tensor transpose_last_two_dims(const tensors::TensorView& input) {
+    return transpose_last_two_dims_impl(input, "transpose_last_two_dims_result");
 }
 
 tensors::TensorView narrow(const tensors::TensorView& input, std::size_t dim, std::size_t start, std::size_t length) {

@@ -26,6 +26,7 @@ using ops::rms_norm;
 using ops::silu;
 using ops::softmax_last_dim;
 using ops::transpose_2d;
+using ops::transpose_last_two_dims;
 using tensor_test_utils::expect_float_values_near;
 using tensor_test_utils::make_bf16_bits_tensor;
 using tensor_test_utils::make_bf16_tensor;
@@ -58,6 +59,17 @@ TEST_F(OpsTest, GivenCompatibleMatrices_WhenMultiplying_ThenMatmulResultIsReturn
     const auto lhs = make_f32_tensor("lhs", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     const auto rhs = make_f32_tensor("rhs", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
     const auto expected = make_f32_tensor("matmul_result", {2, 2}, {58.0f, 64.0f, 139.0f, 154.0f});
+
+    EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
+}
+
+TEST_F(OpsTest, GivenCompatibleBatchedMatrices_WhenMultiplying_ThenBatchedMatmulResultIsReturned) {
+    const auto lhs =
+        make_f32_tensor("lhs", {2, 2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, -1.0f, 0.5f, 2.0f, 3.0f, -2.0f, 1.0f});
+    const auto rhs = make_f32_tensor("rhs", {2, 3, 2},
+                                     {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f, 2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f});
+    const auto expected =
+        make_f32_tensor("matmul_result", {2, 2, 2}, {58.0f, 64.0f, 139.0f, 154.0f, -9.875f, 5.75f, 1.5f, -8.5f});
 
     EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
 }
@@ -99,6 +111,15 @@ TEST_F(OpsTest, GivenRank2Tensor_WhenTransposing_ThenExpectedResultIsReturned) {
     const auto expected = make_f32_tensor("transpose_2d_result", {3, 2}, {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f});
 
     EXPECT_EQ(expected, transpose_2d(input.view()));
+}
+
+TEST_F(OpsTest, GivenRank3Tensor_WhenTransposingLastTwoDims_ThenExpectedResultIsReturned) {
+    const auto input =
+        make_f32_tensor("input", {2, 2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, -1.0f, 0.5f, 2.0f, 3.0f, -2.0f, 1.0f});
+    const auto expected = make_f32_tensor("transpose_last_two_dims_result", {2, 3, 2},
+                                          {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f, -1.0f, 3.0f, 0.5f, -2.0f, 2.0f, 1.0f});
+
+    EXPECT_EQ(expected, transpose_last_two_dims(input.view()));
 }
 
 TEST_F(OpsTest, GivenTensorView_WhenNarrowingFirstDimension_ThenSubspanIsReturned) {
@@ -217,6 +238,16 @@ TEST_F(OpsTest, GivenMismatchedTensorDtypes_WhenAdding_ThenItThrows) {
     const auto rhs = make_bf16_tensor("rhs", {4}, {5.0f, 6.0f, 7.0f, 8.0f});
 
     EXPECT_THROW(add(lhs.view(), rhs.view()), std::invalid_argument);
+}
+
+TEST_F(OpsTest, GivenMismatchedBatchDimensions_WhenMultiplying_ThenMatmulThrows) {
+    const auto lhs =
+        make_f32_tensor("lhs", {2, 2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, -1.0f, 0.5f, 2.0f, 3.0f, -2.0f, 1.0f});
+    const auto rhs = make_f32_tensor("rhs", {3, 3, 2},
+                                     {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f, 2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f,
+                                      0.5f, 1.5f, -2.0f, 0.25f, 3.0f, -0.5f});
+
+    EXPECT_THROW(matmul(lhs.view(), rhs.view()), std::invalid_argument);
 }
 
 } // namespace cppinf::tests
