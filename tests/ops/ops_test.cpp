@@ -15,23 +15,25 @@
 #include "tensors/bfloat16.h"
 #include "tensors/tensor.h"
 
-using cppinf::ops::add;
-using cppinf::ops::cast;
-using cppinf::ops::matmul;
-using cppinf::ops::mul;
-using cppinf::ops::narrow;
-using cppinf::ops::reshape;
-using cppinf::ops::rms_norm;
-using cppinf::ops::silu;
-using cppinf::ops::softmax_last_dim;
-using cppinf::ops::transpose_2d;
-using cppinf::tensors::DType;
-using cppinf::tensors::bfloat16_bits_to_float;
-using cppinf::tensors::float_to_bfloat16_bits;
-using cppinf::tensors::Shape;
-using cppinf::tensors::Tensor;
-using cppinf::tensors::TensorInfo;
-using cppinf::tensors::TensorView;
+namespace cppinf::tests {
+
+using ops::add;
+using ops::cast;
+using ops::matmul;
+using ops::mul;
+using ops::narrow;
+using ops::reshape;
+using ops::rms_norm;
+using ops::silu;
+using ops::softmax_last_dim;
+using ops::transpose_2d;
+using tensors::DType;
+using tensors::bfloat16_bits_to_float;
+using tensors::float_to_bfloat16_bits;
+using tensors::Shape;
+using tensors::Tensor;
+using tensors::TensorInfo;
+using tensors::TensorView;
 
 class OpsTest : public ::testing::Test {
   protected:
@@ -325,3 +327,5 @@ TEST_F(OpsTest, GivenUnsupportedTensorType_WhenAdding_ThenItThrows) {
 
     EXPECT_THROW(static_cast<void>(add(lhs.view(), rhs.view())), std::invalid_argument);
 }
+
+} // namespace cppinf::tests

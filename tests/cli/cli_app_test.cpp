@@ -14,9 +14,11 @@
 #include "cli/cli_app.h"
 #include "test_temp_dir.h"
 
-using cppinf::cli::CliResult;
-using cppinf::cli::run;
-using cppinf::cli::run_with_output_writer;
+namespace cppinf::tests {
+
+using cli::CliResult;
+using cli::run;
+using cli::run_with_output_writer;
 
 class CliAppTest : public ::testing::Test {
   protected:
@@ -345,3 +347,5 @@ TEST_F(CliAppTest, GivenRunHfArgumentsAndWriter_WhenGenerating_ThenPromptAndNewT
     EXPECT_EQ("\n", result.output);
     EXPECT_EQ("AB", streamed_output);
 }
+
+} // namespace cppinf::tests

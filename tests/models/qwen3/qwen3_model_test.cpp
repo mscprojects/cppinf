@@ -17,12 +17,14 @@
 #include "tensors/tensor.h"
 #include "test_temp_dir.h"
 
-using cppinf::models::qwen3::Qwen3Model;
-using cppinf::tensors::bfloat16_bits_to_float;
-using cppinf::tensors::DType;
-using cppinf::tensors::float_to_bfloat16_bits;
-using cppinf::tensors::Shape;
-using cppinf::tensors::Tensor;
+namespace cppinf::tests {
+
+using models::qwen3::Qwen3Model;
+using tensors::bfloat16_bits_to_float;
+using tensors::DType;
+using tensors::float_to_bfloat16_bits;
+using tensors::Shape;
+using tensors::Tensor;
 
 class Qwen3ModelTest : public ::testing::Test {
   protected:
@@ -396,3 +398,5 @@ TEST_F(Qwen3ModelTest, GivenUntiedEmbeddings_WhenLoadingModel_ThenItThrows) {
 
     EXPECT_THROW(static_cast<void>(Qwen3Model::from_dir(model_dir())), std::invalid_argument);
 }
+
+} // namespace cppinf::tests

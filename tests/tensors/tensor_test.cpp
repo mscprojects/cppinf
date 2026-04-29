@@ -12,15 +12,17 @@
 #include "tensors/tensor_info.h"
 #include "tensors/tensor_view.h"
 
-using cppinf::tensors::DType;
-using cppinf::tensors::Shape;
-using cppinf::tensors::Tensor;
-using cppinf::tensors::TensorInfo;
-using cppinf::tensors::TensorView;
-using cppinf::tensors::bfloat16_bits_to_float;
-using cppinf::tensors::element_size_bytes;
-using cppinf::tensors::float_to_bfloat16_bits;
-using cppinf::tensors::to_string;
+namespace cppinf::tests {
+
+using tensors::DType;
+using tensors::Shape;
+using tensors::Tensor;
+using tensors::TensorInfo;
+using tensors::TensorView;
+using tensors::bfloat16_bits_to_float;
+using tensors::element_size_bytes;
+using tensors::float_to_bfloat16_bits;
+using tensors::to_string;
 
 class TensorTest : public ::testing::Test {
   protected:
@@ -123,3 +125,5 @@ TEST_F(TensorTest, GivenMismatchedBytes_WhenCreatingTensorView_ThenItThrows) {
 
     EXPECT_THROW(static_cast<void>(TensorView(tensor_info, wrong_bytes)), std::invalid_argument);
 }
+
+} // namespace cppinf::tests
