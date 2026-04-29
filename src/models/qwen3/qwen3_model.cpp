@@ -149,7 +149,12 @@ Qwen3Model Qwen3Model::from_dir(const std::filesystem::path& model_dir) {
 }
 
 tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) const {
+    // Look up one learned embedding vector per token id, turning token ids [seq] into hidden states [seq, hidden].
     auto hidden_states = embedding_lookup(weights_.tensor_view("model.embed_tokens.weight"), token_ids);
+
+    // Run the transformer stack one decoder block at a time. Each block keeps the outer shape [seq, hidden], while
+    // causal attention mixes information across earlier tokens and the MLP refines each position independently. This
+    // path recomputes the full sequence from scratch, so positions always start at 0.
     for (std::size_t layer_index = 0; layer_index < config_.num_hidden_layers; ++layer_index) {
         const auto layer_weights = make_layer_weights(weights_, layer_index);
         hidden_states = nn::qwen_decoder_block(hidden_states.view(), layer_weights, config_.num_attention_heads,
@@ -157,8 +162,12 @@ tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) con
                                                config_.rope_theta);
     }
 
+    // Apply the final RMSNorm before the language-model head, and keep the shape [seq, hidden].
     const auto normalized_hidden_states =
         ops::rms_norm(hidden_states.view(), weights_.tensor_view("model.norm.weight"), config_.rms_norm_eps);
+
+    // Reuse the tied token embedding table as the output projection. Transposing [vocab, hidden] to [hidden, vocab]
+    // lets us map hidden states [seq, hidden] into logits [seq, vocab], one vocabulary score per token position.
     const auto transposed_embedding = ops::transpose_2d(weights_.tensor_view("model.embed_tokens.weight"));
     auto logits = ops::matmul(normalized_hidden_states.view(), transposed_embedding.view());
     return tensors::rename_tensor("qwen3_logits", logits);
