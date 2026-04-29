@@ -18,18 +18,10 @@
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
 #include "tensors/tensor_info.h"
+#include "tensors/tensor_utils.h"
 
 namespace cppinf::models::qwen3 {
 namespace {
-
-tensors::TensorInfo make_result_info(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
-    return tensors::TensorInfo{
-        .name = std::string(name),
-        .dtype = dtype,
-        .shape = shape,
-        .byte_offset = 0,
-    };
-}
 
 std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
     if (dim < 0) {
@@ -42,11 +34,6 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     }
 
     return value;
-}
-
-tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
-    return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
-                           std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
 }
 
 std::string layer_tensor_name(std::size_t layer_index, std::string_view suffix) {
@@ -123,7 +110,7 @@ tensors::Tensor embedding_lookup(const tensors::TensorView& embedding_table, std
     const auto hidden_size = checked_positive_dim_to_size(dims[1], "embedding hidden size");
     const auto row_byte_size = hidden_size * tensors::element_size_bytes(embedding_table.tensor_info().dtype);
 
-    auto result = tensors::Tensor::zeros(make_result_info(
+    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
         "qwen3_hidden_states", embedding_table.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(token_ids.size()), static_cast<std::int64_t>(hidden_size)})));
 
@@ -170,7 +157,7 @@ tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) con
         ops::rms_norm(hidden_states.view(), weights_.tensor_view("model.norm.weight"), config_.rms_norm_eps);
     const auto transposed_embedding = ops::transpose_2d(weights_.tensor_view("model.embed_tokens.weight"));
     auto logits = ops::matmul(normalized_hidden_states.view(), transposed_embedding.view());
-    return rename_tensor("qwen3_logits", logits);
+    return tensors::rename_tensor("qwen3_logits", logits);
 }
 
 const loaders::hf::HfConfig& Qwen3Model::config() const {

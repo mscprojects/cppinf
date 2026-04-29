@@ -9,17 +9,10 @@
 #include <fmt/format.h>
 #include <oneapi/dnnl/dnnl.hpp>
 
+#include "tensors/tensor_utils.h"
+
 namespace cppinf::ops::detail {
 namespace {
-
-tensors::TensorInfo make_result_info(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
-    return tensors::TensorInfo{
-        .name = std::string(name),
-        .dtype = dtype,
-        .shape = shape,
-        .byte_offset = 0,
-    };
-}
 
 dnnl::memory::data_type to_dnnl_dtype_impl(tensors::DType dtype) {
     switch (dtype) {
@@ -70,7 +63,7 @@ const dnnl::engine& cpu_engine() {
 }
 
 tensors::Tensor make_result_tensor(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
-    return tensors::Tensor::zeros(make_result_info(name, dtype, shape));
+    return tensors::Tensor::zeros(tensors::make_result_tensor_info(name, dtype, shape));
 }
 
 dnnl::memory::desc make_dense_desc(const tensors::Shape& shape, tensors::DType dtype, std::string_view op_name) {

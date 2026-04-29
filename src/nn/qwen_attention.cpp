@@ -20,18 +20,10 @@
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
 #include "tensors/tensor_info.h"
+#include "tensors/tensor_utils.h"
 
 namespace cppinf::nn {
 namespace {
-
-tensors::TensorInfo make_result_info(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
-    return tensors::TensorInfo{
-        .name = std::string(name),
-        .dtype = dtype,
-        .shape = shape,
-        .byte_offset = 0,
-    };
-}
 
 std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
     if (dim < 0) {
@@ -44,11 +36,6 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     }
 
     return value;
-}
-
-tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
-    return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
-                           std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
 }
 
 tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight) {
@@ -71,7 +58,7 @@ tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_c
             fmt::format("{} requires merged head size to equal head_count * head_dim.", result_name));
     }
 
-    auto result = tensors::Tensor::zeros(make_result_info(
+    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
         result_name, input.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(head_count), static_cast<std::int64_t>(sequence_length),
                         static_cast<std::int64_t>(head_dim)})));
@@ -101,7 +88,7 @@ tensors::Tensor merge_heads(const tensors::TensorView& input, std::string_view r
     const auto head_dim = checked_positive_dim_to_size(dims[2], fmt::format("{} head dim", result_name));
     const auto merged_head_size = head_count * head_dim;
 
-    auto result = tensors::Tensor::zeros(make_result_info(
+    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
         result_name, input.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(sequence_length), static_cast<std::int64_t>(merged_head_size)})));
 
@@ -134,7 +121,7 @@ tensors::Tensor repeat_heads(const tensors::TensorView& input, std::size_t targe
             fmt::format("{} requires target head count to divide by input head count.", result_name));
     }
 
-    auto result = tensors::Tensor::zeros(make_result_info(
+    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
         result_name, input.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(target_head_count), static_cast<std::int64_t>(sequence_length),
                         static_cast<std::int64_t>(head_dim)})));
@@ -249,7 +236,8 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
     const auto attention_output =
         causal_self_attention(rotated_query.view(), repeated_key.view(), repeated_value.view());
     const auto merged_attention = merge_heads(attention_output.view(), "qwen_attention_merged_heads");
-    return rename_tensor("qwen_attention_result", linear_project(merged_attention.view(), weights.o_proj_weight));
+    return tensors::rename_tensor("qwen_attention_result",
+                                  linear_project(merged_attention.view(), weights.o_proj_weight));
 }
 
 } // namespace cppinf::nn
