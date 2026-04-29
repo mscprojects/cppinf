@@ -54,7 +54,7 @@ tensors::Tensor softmax_last_dim(const tensors::TensorView& input) {
     validate_last_dim_operation_input(input, "softmax_last_dim");
 
     const auto output_dtype = input.tensor_info().dtype;
-    const auto compute_dtype = output_dtype == tensors::DType::BF16 ? tensors::DType::F32 : output_dtype;
+    const auto compute_dtype = output_dtype;
 
     std::optional<tensors::Tensor> input_storage;
     const auto input_compute =

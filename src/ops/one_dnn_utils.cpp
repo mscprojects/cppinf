@@ -109,7 +109,7 @@ tensors::Tensor maybe_cast_result(tensors::Tensor tensor, tensors::DType dtype, 
 tensors::Tensor binary_with_one_dnn(std::string_view result_name, const tensors::TensorView& lhs,
                                     const tensors::TensorView& rhs, dnnl::algorithm algorithm,
                                     tensors::DType output_dtype) {
-    const tensors::DType compute_dtype = output_dtype == tensors::DType::BF16 ? tensors::DType::F32 : output_dtype;
+    const tensors::DType compute_dtype = output_dtype;
 
     std::optional<tensors::Tensor> lhs_storage;
     std::optional<tensors::Tensor> rhs_storage;
@@ -134,7 +134,7 @@ tensors::Tensor binary_with_one_dnn(std::string_view result_name, const tensors:
 
 tensors::Tensor unary_with_one_dnn(std::string_view result_name, const tensors::TensorView& input,
                                    dnnl::algorithm algorithm, tensors::DType output_dtype, float alpha, float beta) {
-    const tensors::DType compute_dtype = output_dtype == tensors::DType::BF16 ? tensors::DType::F32 : output_dtype;
+    const tensors::DType compute_dtype = output_dtype;
 
     std::optional<tensors::Tensor> input_storage;
     const auto input_compute = maybe_cast_to_dtype(input, compute_dtype, input_storage, result_name);
