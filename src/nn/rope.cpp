@@ -35,12 +35,14 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     return value;
 }
 
-std::size_t flat_index(std::size_t head_index, std::size_t sequence_index, std::size_t feature_index,
-                       std::size_t sequence_length, std::size_t feature_count) {
-    return ((head_index * sequence_length) + sequence_index) * feature_count + feature_index;
+std::size_t flat_index_rank3(std::size_t dim0, std::size_t dim1, std::size_t dim2,
+                             const std::vector<std::int64_t>& dims) {
+    const auto size1 = static_cast<std::size_t>(dims[1]);
+    const auto size2 = static_cast<std::size_t>(dims[2]);
+    return ((dim0 * size1) + dim1) * size2 + dim2;
 }
 
-void validate_rope_input(const tensors::TensorView& input, float rope_base) {
+void validate_rope_input(const tensors::TensorView& input, float rope_base, std::size_t sequence_dimension) {
     ops::detail::validate_supported_float_dtype(input.tensor_info().dtype, "apply_rope");
     if (input.tensor_info().shape.rank() != 3) {
         throw std::invalid_argument("apply_rope requires a rank-3 tensor.");
@@ -50,9 +52,13 @@ void validate_rope_input(const tensors::TensorView& input, float rope_base) {
         throw std::invalid_argument("apply_rope requires a positive finite rope base.");
     }
 
+    if (sequence_dimension > 1) {
+        throw std::invalid_argument("apply_rope requires the sequence dimension to be 0 or 1.");
+    }
+
     const auto& dims = input.tensor_info().shape.dims();
-    checked_positive_dim_to_size(dims[0], "rope heads");
-    checked_positive_dim_to_size(dims[1], "rope sequence length");
+    checked_positive_dim_to_size(dims[0], "rope dim 0");
+    checked_positive_dim_to_size(dims[1], "rope dim 1");
     const auto head_size = checked_positive_dim_to_size(dims[2], "rope head size");
     if (head_size % 2 != 0) {
         throw std::invalid_argument("apply_rope requires an even head size.");
@@ -61,12 +67,13 @@ void validate_rope_input(const tensors::TensorView& input, float rope_base) {
 
 } // namespace
 
-tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequence_position_offset, float rope_base) {
-    validate_rope_input(input, rope_base);
+tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequence_position_offset, float rope_base,
+                           std::size_t sequence_dimension) {
+    validate_rope_input(input, rope_base, sequence_dimension);
 
     const auto& dims = input.tensor_info().shape.dims();
-    const auto head_count = static_cast<std::size_t>(dims[0]);
-    const auto sequence_length = static_cast<std::size_t>(dims[1]);
+    const auto outer_count = static_cast<std::size_t>(dims[1 - sequence_dimension]);
+    const auto sequence_length = static_cast<std::size_t>(dims[sequence_dimension]);
     const auto head_size = static_cast<std::size_t>(dims[2]);
     const auto half_head_size = head_size / 2;
 
@@ -84,7 +91,7 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
     auto result_f32 = tensors::Tensor::zeros(
         tensors::make_result_tensor_info("rope_result", tensors::DType::F32, input.tensor_info().shape));
 
-    for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
+    for (std::size_t outer_index = 0; outer_index < outer_count; ++outer_index) {
         for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
             const auto position = static_cast<float>(sequence_position_offset + sequence_index);
             for (std::size_t pair_index = 0; pair_index < half_head_size; ++pair_index) {
@@ -92,14 +99,13 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
                 const auto cosine = std::cos(angle);
                 const auto sine = std::sin(angle);
 
-                const auto first_index = flat_index(head_index, sequence_index, pair_index, sequence_length, head_size);
-                const auto second_index =
-                    flat_index(head_index, sequence_index, pair_index + half_head_size, sequence_length, head_size);
+                const auto dim0 = sequence_dimension == 0 ? sequence_index : outer_index;
+                const auto dim1 = sequence_dimension == 0 ? outer_index : sequence_index;
+                const auto first_index = flat_index_rank3(dim0, dim1, pair_index, dims);
+                const auto second_index = flat_index_rank3(dim0, dim1, pair_index + half_head_size, dims);
 
-                const auto first_value =
-                    ops::detail::load_float_value(input.tensor_info().dtype, input.data(), first_index);
-                const auto second_value =
-                    ops::detail::load_float_value(input.tensor_info().dtype, input.data(), second_index);
+                const auto first_value = ops::detail::load_float_value(input, first_index);
+                const auto second_value = ops::detail::load_float_value(input, second_index);
 
                 ops::detail::store_float_value(tensors::DType::F32, result_f32.mutable_data(), first_index,
                                                first_value * cosine - second_value * sine);

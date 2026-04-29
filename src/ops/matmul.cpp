@@ -99,10 +99,8 @@ tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView
 
     auto result = detail::make_result_tensor("matmul_result", compute_dtype, make_matmul_result_shape(lhs, rhs));
 
-    const auto src_desc =
-        detail::make_dense_desc(lhs_compute.tensor_info().shape, lhs_compute.tensor_info().dtype, "matmul");
-    const auto weights_desc =
-        detail::make_dense_desc(rhs_compute.tensor_info().shape, rhs_compute.tensor_info().dtype, "matmul");
+    const auto src_desc = detail::make_desc(lhs_compute, "matmul");
+    const auto weights_desc = detail::make_desc(rhs_compute, "matmul");
     const auto dst_desc = detail::make_dense_desc(result.tensor_info().shape, compute_dtype, "matmul");
     const auto primitive_desc = dnnl::matmul::primitive_desc(detail::cpu_engine(), src_desc, weights_desc, dst_desc);
     const auto primitive = dnnl::matmul(primitive_desc);

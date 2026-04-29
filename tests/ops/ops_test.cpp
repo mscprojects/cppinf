@@ -25,6 +25,7 @@ using ops::reshape;
 using ops::rms_norm;
 using ops::silu;
 using ops::softmax_last_dim;
+using ops::squeeze;
 using ops::transpose_2d;
 using ops::transpose_last_two_dims;
 using tensor_test_utils::expect_float_values_near;
@@ -164,10 +165,41 @@ TEST_F(OpsTest, GivenTensorView_WhenNarrowingFirstDimension_ThenSubspanIsReturne
     expect_float_values_near(narrowed, {3.0f, 4.0f, 5.0f, 6.0f}, 0.0f);
 }
 
-TEST_F(OpsTest, GivenNonZeroDimension_WhenNarrowing_ThenItThrows) {
-    const auto input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+TEST_F(OpsTest, GivenTensorView_WhenNarrowingNonLeadingDimension_ThenStridedSubviewIsReturned) {
+    const auto input = make_f32_tensor("input", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+    const auto reshaped = reshape(input.view(), Shape({2, 2, 2}));
+    const auto narrowed = narrow(reshaped, 1, 1, 1);
 
-    EXPECT_THROW(narrow(input.view(), 1, 0, 1), std::invalid_argument);
+    EXPECT_EQ(std::string("input"), narrowed.tensor_info().name);
+    EXPECT_EQ(Shape({2, 1, 2}), narrowed.tensor_info().shape);
+    EXPECT_EQ(std::size_t{2 * sizeof(float)}, narrowed.tensor_info().byte_offset);
+    expect_float_values_near(narrowed, {3.0f, 4.0f, 7.0f, 8.0f}, 0.0f);
+}
+
+TEST_F(OpsTest, GivenUnitDimension_WhenSqueezing_ThenDimensionIsRemoved) {
+    const auto input = make_f32_tensor("input", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+    const auto reshaped = reshape(input.view(), Shape({2, 2, 2}));
+    const auto squeezed = squeeze(narrow(reshaped, 1, 1, 1), 1);
+
+    EXPECT_EQ(Shape({2, 2}), squeezed.tensor_info().shape);
+    expect_float_values_near(squeezed, {3.0f, 4.0f, 7.0f, 8.0f}, 0.0f);
+}
+
+TEST_F(OpsTest, GivenStridedTensorView_WhenReshaping_ThenItThrows) {
+    const auto input = make_f32_tensor("input", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+    const auto reshaped = reshape(input.view(), Shape({2, 2, 2}));
+
+    EXPECT_THROW(reshape(narrow(reshaped, 1, 1, 1), Shape({2, 2})), std::invalid_argument);
+}
+
+TEST_F(OpsTest, GivenStridedTensorView_WhenMultiplying_ThenMatmulUsesLogicalLayout) {
+    const auto input = make_f32_tensor("input", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+    const auto rhs = make_f32_tensor("rhs", {2, 1}, {2.0f, -1.0f});
+    const auto reshaped = reshape(input.view(), Shape({2, 2, 2}));
+    const auto strided_lhs = squeeze(narrow(reshaped, 1, 1, 1), 1);
+    const auto expected = make_f32_tensor("matmul_result", {2, 1}, {2.0f, 6.0f});
+
+    EXPECT_EQ(expected, matmul(strided_lhs, rhs.view()));
 }
 
 TEST_F(OpsTest, GivenMatchingBf16Tensors_WhenAdding_ThenElementwiseSumIsReturned) {

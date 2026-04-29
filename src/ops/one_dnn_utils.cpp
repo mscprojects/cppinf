@@ -63,6 +63,22 @@ dnnl::memory::desc make_dense_desc(const tensors::Shape& shape, tensors::DType d
     return dnnl::memory::desc(dims, to_dnnl_dtype(dtype), make_dense_strides(dims));
 }
 
+dnnl::memory::desc make_desc(const tensors::TensorView& tensor_view, std::string_view op_name) {
+    const auto dims = to_dnnl_dims(tensor_view.tensor_info().shape, op_name);
+    dnnl::memory::dims strides;
+    strides.reserve(tensor_view.strides_bytes().size());
+
+    const auto element_size = static_cast<std::size_t>(tensors::element_size_bytes(tensor_view.tensor_info().dtype));
+    for (const auto stride_bytes : tensor_view.strides_bytes()) {
+        if (stride_bytes % element_size != 0) {
+            throw std::invalid_argument(fmt::format("{} requires element-aligned tensor strides.", op_name));
+        }
+        strides.push_back(static_cast<dnnl::memory::dim>(stride_bytes / element_size));
+    }
+
+    return dnnl::memory::desc(dims, to_dnnl_dtype(tensor_view.tensor_info().dtype), strides);
+}
+
 dnnl::memory::data_type to_dnnl_dtype(tensors::DType dtype) {
     return to_dnnl_dtype_impl(dtype);
 }
@@ -78,7 +94,7 @@ dnnl::memory make_memory(const dnnl::memory::desc& desc, std::span<std::byte> by
 tensors::Tensor cast_with_one_dnn(const tensors::TensorView& input, tensors::DType dtype,
                                   std::string_view result_name) {
     auto result = make_result_tensor(result_name, dtype, input.tensor_info().shape);
-    const dnnl::memory::desc src_desc = make_dense_desc(input.tensor_info().shape, input.tensor_info().dtype, "cast");
+    const dnnl::memory::desc src_desc = make_desc(input, "cast");
     const dnnl::memory::desc dst_desc = make_dense_desc(result.tensor_info().shape, dtype, "cast");
     dnnl::memory src_memory = make_memory(src_desc, input.data());
     dnnl::memory dst_memory = make_memory(dst_desc, result.mutable_data());
@@ -117,8 +133,8 @@ tensors::Tensor binary_with_one_dnn(std::string_view result_name, const tensors:
     const auto rhs_compute = maybe_cast_to_dtype(rhs, compute_dtype, rhs_storage, result_name);
 
     auto result = make_result_tensor(result_name, compute_dtype, lhs_compute.tensor_info().shape);
-    const dnnl::memory::desc src0_desc = make_dense_desc(lhs_compute.tensor_info().shape, compute_dtype, result_name);
-    const dnnl::memory::desc src1_desc = make_dense_desc(rhs_compute.tensor_info().shape, compute_dtype, result_name);
+    const dnnl::memory::desc src0_desc = make_desc(lhs_compute, result_name);
+    const dnnl::memory::desc src1_desc = make_desc(rhs_compute, result_name);
     const dnnl::memory::desc dst_desc = make_dense_desc(result.tensor_info().shape, compute_dtype, result_name);
     const dnnl::binary::primitive_desc primitive_desc(cpu_engine(), algorithm, src0_desc, src1_desc, dst_desc);
     const dnnl::binary primitive(primitive_desc);
@@ -140,7 +156,7 @@ tensors::Tensor unary_with_one_dnn(std::string_view result_name, const tensors::
     const auto input_compute = maybe_cast_to_dtype(input, compute_dtype, input_storage, result_name);
 
     auto result = make_result_tensor(result_name, compute_dtype, input_compute.tensor_info().shape);
-    const dnnl::memory::desc src_desc = make_dense_desc(input_compute.tensor_info().shape, compute_dtype, result_name);
+    const dnnl::memory::desc src_desc = make_desc(input_compute, result_name);
     const dnnl::memory::desc dst_desc = make_dense_desc(result.tensor_info().shape, compute_dtype, result_name);
     const dnnl::eltwise_forward::primitive_desc primitive_desc(cpu_engine(), dnnl::prop_kind::forward_inference,
                                                                algorithm, src_desc, dst_desc, alpha, beta);

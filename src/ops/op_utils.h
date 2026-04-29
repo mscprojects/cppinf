@@ -11,6 +11,7 @@
 
 #include "tensors/bfloat16.h"
 #include "tensors/dtype.h"
+#include "tensors/tensor_view.h"
 
 namespace cppinf::ops::detail {
 
@@ -39,6 +40,28 @@ inline float load_float_value(tensors::DType dtype, std::span<const std::byte> b
     }
 
     throw std::invalid_argument("Unsupported dtype for floating-point load.");
+}
+
+inline float load_float_value(const tensors::TensorView& tensor_view, std::size_t index) {
+    const auto& dims = tensor_view.tensor_info().shape.dims();
+    std::size_t byte_offset = 0;
+    std::size_t remaining = index;
+    for (std::size_t axis = dims.size(); axis-- > 0;) {
+        const auto dim = static_cast<std::size_t>(dims[axis]);
+        if (dim == 0) {
+            throw std::invalid_argument("Cannot index into a tensor view with an empty dimension.");
+        }
+
+        const auto coord = remaining % dim;
+        remaining /= dim;
+        byte_offset += coord * tensor_view.strides_bytes()[axis];
+    }
+
+    if (remaining != 0) {
+        throw std::out_of_range("TensorView flat index is out of bounds.");
+    }
+
+    return load_float_value(tensor_view.tensor_info().dtype, tensor_view.data().subspan(byte_offset), 0);
 }
 
 inline void store_float_value(tensors::DType dtype, std::span<std::byte> bytes, std::size_t index, float value) {
