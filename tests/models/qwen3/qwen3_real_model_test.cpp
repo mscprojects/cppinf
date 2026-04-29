@@ -39,8 +39,13 @@ class Qwen3RealModelTest : public ::testing::Test {
         return std::filesystem::path(__FILE__).parent_path() / "qwen3_real_last_token_logits.safetensors";
     }
 
-    const char* real_model_dir_env() const {
-        return std::getenv("CPPINF_QWEN3_REAL_MODEL_DIR");
+    std::filesystem::path real_model_dir() const {
+        const char* const model_dir_env = std::getenv("CPPINF_QWEN3_REAL_MODEL_DIR");
+        if (model_dir_env != nullptr && *model_dir_env != '\0') {
+            return model_dir_env;
+        }
+
+        throw std::invalid_argument("CPPINF_QWEN3_REAL_MODEL_DIR must be set for real Qwen3 tests.");
     }
 
     std::vector<float> read_last_token_values(const Tensor& tensor) const {
@@ -119,12 +124,7 @@ class Qwen3RealModelTest : public ::testing::Test {
 };
 
 TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenTopFiveLikelyTokensStayCloseToOracle) {
-    const char* const model_dir_env = real_model_dir_env();
-    if (model_dir_env == nullptr || *model_dir_env == '\0') {
-        GTEST_SKIP() << "Set CPPINF_QWEN3_REAL_MODEL_DIR to run the real Qwen3 oracle test.";
-    }
-
-    const std::filesystem::path model_dir = model_dir_env;
+    const std::filesystem::path model_dir = real_model_dir();
     ASSERT_TRUE(std::filesystem::exists(model_dir)) << model_dir;
 
     const std::vector<std::int64_t> token_ids{151643, 42, 1024, 4096};
@@ -161,12 +161,7 @@ TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenTopFiveLik
 }
 
 TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenFullLastTokenLogitsStayCloseToOracle) {
-    const char* const model_dir_env = real_model_dir_env();
-    if (model_dir_env == nullptr || *model_dir_env == '\0') {
-        GTEST_SKIP() << "Set CPPINF_QWEN3_REAL_MODEL_DIR to run the real Qwen3 oracle test.";
-    }
-
-    const std::filesystem::path model_dir = model_dir_env;
+    const std::filesystem::path model_dir = real_model_dir();
     ASSERT_TRUE(std::filesystem::exists(model_dir)) << model_dir;
 
     const std::vector<std::int64_t> token_ids{151643, 42, 1024, 4096};
