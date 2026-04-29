@@ -1,6 +1,6 @@
 build:
     cmake -S . -B build
-    cmake --build build
+    cmake --build build --parallel
 
 run *args: build
     ./build/cppinf {{args}}
