@@ -11,13 +11,15 @@
 #include "loaders/hf/hf_model_summary.h"
 #include "test_temp_dir.h"
 
-using cppinf::loaders::hf::format_model_summary;
-using cppinf::loaders::hf::HfConfig;
-using cppinf::loaders::hf::HfModelSummary;
-using cppinf::loaders::hf::load_model_summary;
-using cppinf::tensors::DType;
-using cppinf::tensors::Shape;
-using cppinf::tensors::TensorInfo;
+namespace cppinf::tests {
+
+using loaders::hf::format_model_summary;
+using loaders::hf::HfConfig;
+using loaders::hf::HfModelSummary;
+using loaders::hf::load_model_summary;
+using tensors::DType;
+using tensors::Shape;
+using tensors::TensorInfo;
 
 class HfModelSummaryTest : public ::testing::Test {
   protected:
@@ -208,3 +210,5 @@ TEST_F(HfModelSummaryTest, GivenSummary_WhenFormatting_ThenReadableTextIsProduce
                           "  - embed | dtype=bf16 | shape=[2, 4] | offset=0 | bytes=16\n"),
               format_model_summary(summary));
 }
+
+} // namespace cppinf::tests

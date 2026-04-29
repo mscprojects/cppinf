@@ -13,9 +13,11 @@
 #include "tensors/dtype.h"
 #include "test_temp_dir.h"
 
-using cppinf::loaders::hf::HfConfig;
-using cppinf::loaders::hf::HfModelFiles;
-using cppinf::tensors::DType;
+namespace cppinf::tests {
+
+using loaders::hf::HfConfig;
+using loaders::hf::HfModelFiles;
+using tensors::DType;
 
 class HfModelFilesTest : public ::testing::Test {
   protected:
@@ -160,3 +162,5 @@ TEST_F(HfModelFilesTest, GivenShardedIndex_WhenResolving_ThenItThrows) {
 
     EXPECT_THROW(static_cast<void>(HfModelFiles::from_dir(model_dir())), std::invalid_argument);
 }
+
+} // namespace cppinf::tests

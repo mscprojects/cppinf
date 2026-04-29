@@ -4,8 +4,10 @@
 
 #include "loaders/hf/hf_config.h"
 
-using cppinf::loaders::hf::HfConfig;
-using cppinf::tensors::DType;
+namespace cppinf::tests {
+
+using loaders::hf::HfConfig;
+using tensors::DType;
 
 class HfConfigTest : public ::testing::Test {};
 
@@ -83,3 +85,5 @@ TEST_F(HfConfigTest, GivenUnsupportedTorchDtype_WhenParsing_ThenItThrows) {
 
     EXPECT_THROW(static_cast<void>(HfConfig::from_json_text(json_text)), std::invalid_argument);
 }
+
+} // namespace cppinf::tests

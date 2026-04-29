@@ -10,6 +10,8 @@
 
 #include <fmt/format.h>
 
+namespace cppinf::tests {
+
 class TestTempDir {
   public:
     explicit TestTempDir(std::string_view prefix) {
@@ -46,3 +48,5 @@ class TestTempDir {
   private:
     std::filesystem::path path_;
 };
+
+} // namespace cppinf::tests

@@ -11,8 +11,10 @@
 #include "files/safetensors_file.h"
 #include "test_temp_dir.h"
 
-using cppinf::files::SafetensorsFile;
-using cppinf::tensors::DType;
+namespace cppinf::tests {
+
+using files::SafetensorsFile;
+using tensors::DType;
 
 class SafetensorsFileTest : public ::testing::Test {
   protected:
@@ -129,3 +131,5 @@ TEST_F(SafetensorsFileTest, GivenInvalidTensorRange_WhenLoading_ThenItThrows) {
     EXPECT_THROW(static_cast<void>(SafetensorsFile::from_bytes(make_file_bytes(header, tensor_data))),
                  std::invalid_argument);
 }
+
+} // namespace cppinf::tests

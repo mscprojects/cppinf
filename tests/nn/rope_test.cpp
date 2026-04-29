@@ -12,14 +12,16 @@
 #include "tensors/bfloat16.h"
 #include "tensors/tensor.h"
 
-using cppinf::nn::apply_rope;
-using cppinf::tensors::bfloat16_bits_to_float;
-using cppinf::tensors::DType;
-using cppinf::tensors::float_to_bfloat16_bits;
-using cppinf::tensors::Shape;
-using cppinf::tensors::Tensor;
-using cppinf::tensors::TensorInfo;
-using cppinf::tensors::TensorView;
+namespace cppinf::tests {
+
+using nn::apply_rope;
+using tensors::bfloat16_bits_to_float;
+using tensors::DType;
+using tensors::float_to_bfloat16_bits;
+using tensors::Shape;
+using tensors::Tensor;
+using tensors::TensorInfo;
+using tensors::TensorView;
 
 class RopeTest : public ::testing::Test {
   protected:
@@ -132,3 +134,5 @@ TEST_F(RopeTest, GivenOddHeadSize_WhenApplyingRope_ThenItThrows) {
 
     EXPECT_THROW(static_cast<void>(apply_rope(input.view())), std::invalid_argument);
 }
+
+} // namespace cppinf::tests

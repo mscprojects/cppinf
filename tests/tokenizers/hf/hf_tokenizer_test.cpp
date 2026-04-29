@@ -10,7 +10,9 @@
 #include "test_temp_dir.h"
 #include "tokenizers/hf/hf_tokenizer.h"
 
-using cppinf::tokenizers::hf::HfTokenizer;
+namespace cppinf::tests {
+
+using tokenizers::hf::HfTokenizer;
 
 class HfTokenizerTest : public ::testing::Test {
   protected:
@@ -194,3 +196,5 @@ TEST_F(HfTokenizerTest, GivenRealQwenTokenizer_WhenEncodingAndDecoding_ThenExpec
     EXPECT_EQ(std::int64_t{151645}, tokenizer.eos_token_id().value());
     EXPECT_EQ(std::int64_t{151643}, tokenizer.pad_token_id().value());
 }
+
+} // namespace cppinf::tests

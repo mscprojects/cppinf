@@ -19,15 +19,17 @@
 #include "tensors/tensor.h"
 #include "tensors/tensor_view.h"
 
-using cppinf::files::SafetensorsFile;
-using cppinf::models::qwen3::Qwen3Model;
-using cppinf::tensors::bfloat16_bits_to_float;
-using cppinf::tensors::DType;
-using cppinf::tensors::element_size_bytes;
-using cppinf::tensors::Shape;
-using cppinf::tensors::Tensor;
-using cppinf::tensors::TensorInfo;
-using cppinf::tensors::TensorView;
+namespace cppinf::tests {
+
+using files::SafetensorsFile;
+using models::qwen3::Qwen3Model;
+using tensors::bfloat16_bits_to_float;
+using tensors::DType;
+using tensors::element_size_bytes;
+using tensors::Shape;
+using tensors::Tensor;
+using tensors::TensorInfo;
+using tensors::TensorView;
 
 class Qwen3RealModelTest : public ::testing::Test {
   protected:
@@ -217,3 +219,5 @@ TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenFullLastTo
     EXPECT_LE(max_abs_diff, 0.5f);
     EXPECT_LE(mean_abs_diff, 0.2f);
 }
+
+} // namespace cppinf::tests

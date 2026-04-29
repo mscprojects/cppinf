@@ -12,17 +12,19 @@
 #include "tensors/bfloat16.h"
 #include "tensors/tensor.h"
 
-using cppinf::nn::qwen_decoder_block;
-using cppinf::nn::QwenAttentionWeights;
-using cppinf::nn::QwenDecoderBlockWeights;
-using cppinf::nn::QwenMlpWeights;
-using cppinf::tensors::DType;
-using cppinf::tensors::bfloat16_bits_to_float;
-using cppinf::tensors::float_to_bfloat16_bits;
-using cppinf::tensors::Shape;
-using cppinf::tensors::Tensor;
-using cppinf::tensors::TensorInfo;
-using cppinf::tensors::TensorView;
+namespace cppinf::tests {
+
+using nn::qwen_decoder_block;
+using nn::QwenAttentionWeights;
+using nn::QwenDecoderBlockWeights;
+using nn::QwenMlpWeights;
+using tensors::DType;
+using tensors::bfloat16_bits_to_float;
+using tensors::float_to_bfloat16_bits;
+using tensors::Shape;
+using tensors::Tensor;
+using tensors::TensorInfo;
+using tensors::TensorView;
 
 class QwenDecoderBlockTest : public ::testing::Test {
   protected:
@@ -334,3 +336,5 @@ TEST_F(QwenDecoderBlockTest, GivenMismatchedLayerNormWeight_WhenApplyingQwenDeco
     EXPECT_THROW(static_cast<void>(qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f)),
                  std::invalid_argument);
 }
+
+} // namespace cppinf::tests
