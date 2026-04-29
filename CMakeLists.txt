@@ -66,6 +66,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(CLI11 fmt googletest nlohmann_json oneDNN spdlog)
+find_package(OpenMP REQUIRED)
 
 set(CPPINF_SOURCES
     src/cli/cli_app.cpp
@@ -124,7 +125,8 @@ add_executable(cppinf
 target_include_directories(cppinf PRIVATE
     ${PROJECT_SOURCE_DIR}/src
 )
-target_link_libraries(cppinf PRIVATE CLI11::CLI11 dnnl fmt::fmt nlohmann_json::nlohmann_json spdlog::spdlog)
+target_link_libraries(cppinf PRIVATE CLI11::CLI11 dnnl fmt::fmt nlohmann_json::nlohmann_json
+                                     OpenMP::OpenMP_CXX spdlog::spdlog)
 
 if(BUILD_TESTING)
     add_executable(cppinf_tests
@@ -150,7 +152,7 @@ if(BUILD_TESTING)
         ${PROJECT_SOURCE_DIR}/tests
     )
     target_link_libraries(cppinf_tests PRIVATE CLI11::CLI11 dnnl fmt::fmt GTest::gtest_main
-                                                 nlohmann_json::nlohmann_json)
+                                               nlohmann_json::nlohmann_json OpenMP::OpenMP_CXX)
 
     gtest_discover_tests(cppinf_tests)
 endif()
