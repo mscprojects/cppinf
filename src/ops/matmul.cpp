@@ -10,19 +10,34 @@
 namespace cppinf::ops {
 namespace {
 
-void validate_matmul_inputs(const tensors::TensorView& lhs, const tensors::TensorView& rhs,
-                            tensors::DType output_dtype) {
-    if (lhs.tensor_info().dtype != rhs.tensor_info().dtype) {
-        throw std::invalid_argument("matmul requires matching tensor dtypes.");
+tensors::DType resolve_output_dtype(const tensors::TensorView& lhs, const tensors::TensorView& rhs,
+                                    MatmulOptions options) {
+    if (options.output_dtype.has_value()) {
+        return *options.output_dtype;
     }
 
+    if (lhs.tensor_info().dtype == rhs.tensor_info().dtype) {
+        return lhs.tensor_info().dtype;
+    }
+
+    return tensors::DType::F32;
+}
+
+void validate_matmul_inputs(const tensors::TensorView& lhs, const tensors::TensorView& rhs,
+                            tensors::DType output_dtype) {
     detail::validate_supported_float_dtype(lhs.tensor_info().dtype, "matmul");
+    detail::validate_supported_float_dtype(rhs.tensor_info().dtype, "matmul");
     detail::validate_supported_float_dtype(output_dtype, "matmul");
 
-    if (output_dtype != lhs.tensor_info().dtype &&
-        (lhs.tensor_info().dtype != tensors::DType::BF16 || output_dtype != tensors::DType::F32)) {
-        throw std::invalid_argument(
-            "matmul output dtype must match the input dtype, except BF16 inputs may request an F32 result.");
+    const bool inputs_match = lhs.tensor_info().dtype == rhs.tensor_info().dtype;
+    if (inputs_match) {
+        if (output_dtype != lhs.tensor_info().dtype &&
+            (lhs.tensor_info().dtype != tensors::DType::BF16 || output_dtype != tensors::DType::F32)) {
+            throw std::invalid_argument(
+                "matmul output dtype must match the input dtype, except BF16 inputs may request an F32 result.");
+        }
+    } else if (output_dtype != tensors::DType::F32) {
+        throw std::invalid_argument("matmul requires an F32 result when input dtypes differ.");
     }
 
     if (lhs.tensor_info().shape.rank() != rhs.tensor_info().shape.rank()) {
@@ -56,25 +71,29 @@ tensors::Shape make_matmul_result_shape(const tensors::TensorView& lhs, const te
     return tensors::Shape({lhs_dims[0], lhs_dims[1], rhs_dims[2]});
 }
 
-} // namespace
-
-tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView& rhs) {
-    return matmul(lhs, rhs, lhs.tensor_info().dtype);
+bool supports_native_matmul_input_dtypes(tensors::DType lhs_dtype, tensors::DType rhs_dtype,
+                                         tensors::DType output_dtype) {
+    return output_dtype == tensors::DType::F32 &&
+           ((lhs_dtype == tensors::DType::BF16 && rhs_dtype == tensors::DType::BF16) ||
+            (lhs_dtype == tensors::DType::F32 && rhs_dtype == tensors::DType::BF16));
 }
 
-tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView& rhs, tensors::DType output_dtype) {
+} // namespace
+
+tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView& rhs, MatmulOptions options) {
+    const auto output_dtype = resolve_output_dtype(lhs, rhs, options);
     validate_matmul_inputs(lhs, rhs, output_dtype);
 
-    const auto input_dtype = lhs.tensor_info().dtype;
     const auto compute_dtype = output_dtype == tensors::DType::BF16 ? tensors::DType::F32 : output_dtype;
-    const bool can_keep_input_dtype = input_dtype == tensors::DType::BF16 && output_dtype == tensors::DType::F32;
+    const bool can_keep_input_dtypes =
+        supports_native_matmul_input_dtypes(lhs.tensor_info().dtype, rhs.tensor_info().dtype, output_dtype);
 
     std::optional<tensors::Tensor> lhs_storage;
     std::optional<tensors::Tensor> rhs_storage;
     const auto lhs_compute =
-        can_keep_input_dtype ? lhs : detail::maybe_cast_to_dtype(lhs, compute_dtype, lhs_storage, "matmul_result");
+        can_keep_input_dtypes ? lhs : detail::maybe_cast_to_dtype(lhs, compute_dtype, lhs_storage, "matmul_result");
     const auto rhs_compute =
-        can_keep_input_dtype ? rhs : detail::maybe_cast_to_dtype(rhs, compute_dtype, rhs_storage, "matmul_result");
+        can_keep_input_dtypes ? rhs : detail::maybe_cast_to_dtype(rhs, compute_dtype, rhs_storage, "matmul_result");
 
     auto result = detail::make_result_tensor("matmul_result", compute_dtype, make_matmul_result_shape(lhs, rhs));
 
