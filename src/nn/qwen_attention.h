@@ -17,7 +17,8 @@ struct QwenAttentionWeights {
 };
 
 // Applies bias-free Qwen attention to rank-2 [sequence, hidden] hidden states with projection and q/k norm weights.
-// Supports grouped KV heads, explicit head_dim, and position offsets while preserving the caller-visible dtype.
+// Fuses the Qwen-specific projection, q/k norm, RoPE, grouped KV handling, causal attention, and output projection
+// into one high-level op while preserving the caller-visible dtype.
 tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
                                std::size_t num_attention_heads, std::size_t num_key_value_heads, std::size_t head_dim,
                                float norm_epsilon, std::size_t sequence_position_offset = 0,

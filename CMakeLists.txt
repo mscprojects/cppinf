@@ -126,8 +126,6 @@ set(CPPINF_SOURCES
     src/loaders/hf/hf_model_summary.h
     src/models/qwen3/qwen3_model.cpp
     src/models/qwen3/qwen3_model.h
-    src/nn/causal_self_attention.cpp
-    src/nn/causal_self_attention.h
     src/nn/qwen_decoder_block.cpp
     src/nn/qwen_decoder_block.h
     src/nn/qwen_attention.cpp
@@ -185,7 +183,6 @@ if(BUILD_TESTING)
         tests/loaders/hf/hf_model_summary_test.cpp
         tests/models/qwen3/qwen3_model_test.cpp
         tests/models/qwen3/qwen3_real_model_test.cpp
-        tests/nn/causal_self_attention_test.cpp
         tests/nn/qwen_decoder_block_test.cpp
         tests/nn/qwen_attention_test.cpp
         tests/nn/qwen_mlp_test.cpp

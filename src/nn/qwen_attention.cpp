@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -11,10 +12,10 @@
 
 #include <fmt/format.h>
 
-#include "nn/causal_self_attention.h"
 #include "nn/rope.h"
 #include "ops/matmul.h"
 #include "ops/nn_ops.h"
+#include "ops/one_dnn_utils.h"
 #include "ops/op_utils.h"
 #include "ops/tensor_ops.h"
 #include "tensors/dtype.h"
@@ -36,6 +37,35 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     }
 
     return value;
+}
+
+tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, float scale) {
+    const auto& dims = scores.tensor_info().shape.dims();
+    const auto head_count = checked_positive_dim_to_size(dims[0], "qwen_attention attention head count");
+    const auto sequence_length = checked_positive_dim_to_size(dims[1], "qwen_attention sequence length");
+    const auto key_sequence_length = checked_positive_dim_to_size(dims[2], "qwen_attention key sequence length");
+    if (sequence_length != key_sequence_length) {
+        throw std::invalid_argument("qwen_attention requires square attention score matrices.");
+    }
+
+    auto masked_scores = tensors::Tensor::zeros(
+        tensors::make_result_tensor_info("qwen_attention_scores", tensors::DType::F32, scores.tensor_info().shape));
+
+    for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
+        for (std::size_t query_index = 0; query_index < sequence_length; ++query_index) {
+            for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
+                const auto flat_index =
+                    ((head_index * sequence_length) + query_index) * key_sequence_length + key_index;
+                const auto value =
+                    key_index <= query_index
+                        ? ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) * scale
+                        : -std::numeric_limits<float>::infinity();
+                ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index, value);
+            }
+        }
+    }
+
+    return masked_scores;
 }
 
 tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight) {
@@ -212,6 +242,23 @@ void validate_qwen_attention_inputs(const tensors::TensorView& hidden_states, co
                                num_attention_heads * head_dim);
 }
 
+tensors::Tensor fused_causal_attention(const tensors::TensorView& query, const tensors::TensorView& key,
+                                       const tensors::TensorView& value) {
+    const auto& query_dims = query.tensor_info().shape.dims();
+    const auto query_head_size = checked_positive_dim_to_size(query_dims[2], "qwen_attention query head size");
+    const auto score_scale = 1.0f / std::sqrt(static_cast<float>(query_head_size));
+
+    const auto transposed_key = ops::transpose_last_two_dims(key);
+    const auto attention_scores =
+        ops::matmul(query, transposed_key.view(), ops::MatmulOptions{.output_dtype = tensors::DType::F32});
+    const auto masked_scores = scale_and_causal_mask_scores(attention_scores.view(), score_scale);
+    const auto probabilities = ops::softmax_last_dim(masked_scores.view());
+    auto result_f32 = ops::matmul(probabilities.view(), value);
+    result_f32 = tensors::rename_tensor("qwen_attention_attention_output", result_f32);
+    return ops::detail::maybe_cast_result(std::move(result_f32), query.tensor_info().dtype,
+                                          "qwen_attention_attention_output");
+}
+
 } // namespace
 
 tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
@@ -247,10 +294,10 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
     const auto repeated_key = repeat_heads(rotated_key.view(), num_attention_heads, "qwen_attention_key_repeat");
     const auto repeated_value = repeat_heads(value_heads.view(), num_attention_heads, "qwen_attention_value_repeat");
 
-    // Causal attention mixes each query head over the visible prefix, merge_heads packs the result back to
-    // [seq, q_heads * head_dim], and the final output projection returns [seq, hidden].
+    // Fuse the causal attention core into qwen_attention so the Qwen-specific path owns the score construction,
+    // masking, softmax, and value mixing directly.
     const auto attention_output =
-        causal_self_attention(rotated_query.view(), repeated_key.view(), repeated_value.view());
+        fused_causal_attention(rotated_query.view(), repeated_key.view(), repeated_value.view());
     const auto merged_attention = merge_heads(attention_output.view(), "qwen_attention_merged_heads");
     return tensors::rename_tensor("qwen_attention_result",
                                   linear_project(merged_attention.view(), weights.o_proj_weight));
