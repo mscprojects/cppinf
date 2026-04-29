@@ -212,23 +212,9 @@ TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingRmsNorm_ThenExpectedValue
         {-1.171875f, -0.09765625f, -0.5859375f, 3.125f, 1.0703125f, -0.8046875f, -0.66796875f, 0.53515625f}, 1e-6f);
 }
 
-TEST_F(OpsTest, GivenUnsupportedTensorType_WhenAdding_ThenItThrows) {
-    const Tensor lhs(
-        TensorInfo{
-            .name = "lhs",
-            .dtype = DType::U8,
-            .shape = Shape({4}),
-            .byte_offset = 0,
-        },
-        std::vector<std::byte>{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04}});
-    const Tensor rhs(
-        TensorInfo{
-            .name = "rhs",
-            .dtype = DType::U8,
-            .shape = Shape({4}),
-            .byte_offset = 0,
-        },
-        std::vector<std::byte>{std::byte{0x05}, std::byte{0x06}, std::byte{0x07}, std::byte{0x08}});
+TEST_F(OpsTest, GivenMismatchedTensorDtypes_WhenAdding_ThenItThrows) {
+    const auto lhs = make_f32_tensor("lhs", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto rhs = make_bf16_tensor("rhs", {4}, {5.0f, 6.0f, 7.0f, 8.0f});
 
     EXPECT_THROW(add(lhs.view(), rhs.view()), std::invalid_argument);
 }

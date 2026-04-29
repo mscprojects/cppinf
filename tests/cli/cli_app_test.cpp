@@ -60,7 +60,7 @@ class CliAppTest : public ::testing::Test {
             std::byte{0x1f}, std::byte{0x20}, std::byte{0x21}, std::byte{0x22}, std::byte{0x23},
         };
         const std::string header =
-            R"({"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"token_ids":{"dtype":"U8","shape":[4],"data_offsets":[16,20]}})";
+            R"({"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"tail":{"dtype":"F32","shape":[1],"data_offsets":[16,20]}})";
         write_binary_file("model.safetensors", file_test_utils::make_safetensors_file_bytes(header, tensor_data));
     }
 
@@ -277,7 +277,7 @@ TEST_F(CliAppTest, GivenInspectHfLimit_WhenRunning_ThenTensorPreviewIsLimited) {
     EXPECT_EQ(0, result.exit_code);
     EXPECT_NE(std::string::npos, result.output.find("Tensor preview (showing 1 of 2):"));
     EXPECT_NE(std::string::npos, result.output.find("embed"));
-    EXPECT_EQ(std::string::npos, result.output.find("token_ids"));
+    EXPECT_EQ(std::string::npos, result.output.find("tail"));
 }
 
 TEST_F(CliAppTest, GivenInspectHfAll_WhenRunning_ThenAllTensorsAreShown) {
@@ -290,7 +290,7 @@ TEST_F(CliAppTest, GivenInspectHfAll_WhenRunning_ThenAllTensorsAreShown) {
     EXPECT_EQ(0, result.exit_code);
     EXPECT_NE(std::string::npos, result.output.find("Tensors:\n"));
     EXPECT_NE(std::string::npos, result.output.find("embed"));
-    EXPECT_NE(std::string::npos, result.output.find("token_ids"));
+    EXPECT_NE(std::string::npos, result.output.find("tail"));
 }
 
 TEST_F(CliAppTest, GivenRunHfArguments_WhenGeneratingGreedyTokens_ThenPromptIsContinued) {

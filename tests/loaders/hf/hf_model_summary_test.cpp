@@ -61,7 +61,7 @@ class HfModelSummaryTest : public ::testing::Test {
             std::byte{0x1f}, std::byte{0x20}, std::byte{0x21}, std::byte{0x22}, std::byte{0x23},
         };
         const std::string header =
-            R"({"__metadata__":{"format":"pt"},"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"token_ids":{"dtype":"U8","shape":[4],"data_offsets":[16,20]}})";
+            R"({"__metadata__":{"format":"pt"},"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"tail":{"dtype":"F32","shape":[1],"data_offsets":[16,20]}})";
         write_binary_file("model.safetensors", file_test_utils::make_safetensors_file_bytes(header, tensor_data));
     }
 
@@ -109,9 +109,9 @@ TEST_F(HfModelSummaryTest, GivenValidDirectory_WhenLoadingSummary_ThenExpectedSu
                     .byte_offset = 0,
                 },
                 TensorInfo{
-                    .name = "token_ids",
-                    .dtype = DType::U8,
-                    .shape = Shape({4}),
+                    .name = "tail",
+                    .dtype = DType::F32,
+                    .shape = Shape({1}),
                     .byte_offset = 16,
                 },
             },

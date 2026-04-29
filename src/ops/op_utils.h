@@ -19,11 +19,6 @@ inline void validate_supported_float_dtype(tensors::DType dtype, std::string_vie
     case tensors::DType::BF16:
     case tensors::DType::F32:
         return;
-    case tensors::DType::F16:
-    case tensors::DType::I32:
-    case tensors::DType::I64:
-    case tensors::DType::U8:
-        throw std::invalid_argument(fmt::format("{} currently supports only f32 and bf16 tensors.", op_name));
     }
 
     throw std::invalid_argument(fmt::format("{} received an unsupported dtype.", op_name));
@@ -41,11 +36,6 @@ inline float load_float_value(tensors::DType dtype, std::span<const std::byte> b
         std::memcpy(&bits, bytes.data() + index * sizeof(std::uint16_t), sizeof(std::uint16_t));
         return tensors::bfloat16_bits_to_float(bits);
     }
-    case tensors::DType::F16:
-    case tensors::DType::I32:
-    case tensors::DType::I64:
-    case tensors::DType::U8:
-        break;
     }
 
     throw std::invalid_argument("Unsupported dtype for floating-point load.");
@@ -61,11 +51,6 @@ inline void store_float_value(tensors::DType dtype, std::span<std::byte> bytes, 
         std::memcpy(bytes.data() + index * sizeof(std::uint16_t), &bits, sizeof(std::uint16_t));
         return;
     }
-    case tensors::DType::F16:
-    case tensors::DType::I32:
-    case tensors::DType::I64:
-    case tensors::DType::U8:
-        break;
     }
 
     throw std::invalid_argument("Unsupported dtype for floating-point store.");

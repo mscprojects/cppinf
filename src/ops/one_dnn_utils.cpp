@@ -16,18 +16,10 @@ namespace {
 
 dnnl::memory::data_type to_dnnl_dtype_impl(tensors::DType dtype) {
     switch (dtype) {
-    case tensors::DType::F16:
-        return dnnl::memory::data_type::f16;
     case tensors::DType::BF16:
         return dnnl::memory::data_type::bf16;
     case tensors::DType::F32:
         return dnnl::memory::data_type::f32;
-    case tensors::DType::I32:
-        return dnnl::memory::data_type::s32;
-    case tensors::DType::I64:
-        break;
-    case tensors::DType::U8:
-        return dnnl::memory::data_type::u8;
     }
 
     throw std::invalid_argument("Unsupported dtype for oneDNN.");
