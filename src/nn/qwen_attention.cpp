@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -16,6 +15,7 @@
 #include "nn/rope.h"
 #include "ops/matmul.h"
 #include "ops/nn_ops.h"
+#include "ops/op_utils.h"
 #include "ops/tensor_ops.h"
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
@@ -46,30 +46,6 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     return value;
 }
 
-void validate_supported_float_dtype(tensors::DType dtype, std::string_view op_name) {
-    switch (dtype) {
-    case tensors::DType::BF16:
-    case tensors::DType::F32:
-        return;
-    case tensors::DType::F16:
-    case tensors::DType::I32:
-    case tensors::DType::I64:
-    case tensors::DType::U8:
-        throw std::invalid_argument(fmt::format("{} currently supports only f32 and bf16 tensors.", op_name));
-    }
-
-    throw std::invalid_argument(fmt::format("{} received an unsupported dtype.", op_name));
-}
-
-tensors::TensorView maybe_cast_to_f32(const tensors::TensorView& input, std::optional<tensors::Tensor>& storage) {
-    if (input.tensor_info().dtype == tensors::DType::F32) {
-        return input;
-    }
-
-    storage.emplace(cppinf::ops::cast(input, tensors::DType::F32));
-    return storage->view();
-}
-
 tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
     return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
                            std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
@@ -82,8 +58,8 @@ tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::
 
 tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_count, std::size_t head_dim,
                             std::string_view result_name) {
-    if (input.tensor_info().dtype != tensors::DType::F32 || input.tensor_info().shape.rank() != 2) {
-        throw std::invalid_argument("split_heads requires a rank-2 f32 tensor.");
+    if (input.tensor_info().shape.rank() != 2) {
+        throw std::invalid_argument("split_heads requires a rank-2 tensor.");
     }
 
     const auto& dims = input.tensor_info().shape.dims();
@@ -96,14 +72,15 @@ tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_c
     }
 
     auto result = tensors::Tensor::zeros(make_result_info(
-        result_name, tensors::DType::F32,
+        result_name, input.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(head_count), static_cast<std::int64_t>(sequence_length),
                         static_cast<std::int64_t>(head_dim)})));
 
-    const auto head_bytes = head_dim * sizeof(float);
+    const auto element_size = tensors::element_size_bytes(input.tensor_info().dtype);
+    const auto head_bytes = head_dim * element_size;
     for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
         for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
-            const auto source_offset = (sequence_index * merged_head_size + head_index * head_dim) * sizeof(float);
+            const auto source_offset = (sequence_index * merged_head_size + head_index * head_dim) * element_size;
             const auto destination_offset = ((head_index * sequence_length) + sequence_index) * head_bytes;
             std::memcpy(result.mutable_data().data() + destination_offset, input.data().data() + source_offset,
                         head_bytes);
@@ -114,8 +91,8 @@ tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_c
 }
 
 tensors::Tensor merge_heads(const tensors::TensorView& input, std::string_view result_name) {
-    if (input.tensor_info().dtype != tensors::DType::F32 || input.tensor_info().shape.rank() != 3) {
-        throw std::invalid_argument("merge_heads requires a rank-3 f32 tensor.");
+    if (input.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("merge_heads requires a rank-3 tensor.");
     }
 
     const auto& dims = input.tensor_info().shape.dims();
@@ -125,14 +102,15 @@ tensors::Tensor merge_heads(const tensors::TensorView& input, std::string_view r
     const auto merged_head_size = head_count * head_dim;
 
     auto result = tensors::Tensor::zeros(make_result_info(
-        result_name, tensors::DType::F32,
+        result_name, input.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(sequence_length), static_cast<std::int64_t>(merged_head_size)})));
 
-    const auto head_bytes = head_dim * sizeof(float);
+    const auto element_size = tensors::element_size_bytes(input.tensor_info().dtype);
+    const auto head_bytes = head_dim * element_size;
     for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
         for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
             const auto source_offset = ((head_index * sequence_length) + sequence_index) * head_bytes;
-            const auto destination_offset = (sequence_index * merged_head_size + head_index * head_dim) * sizeof(float);
+            const auto destination_offset = (sequence_index * merged_head_size + head_index * head_dim) * element_size;
             std::memcpy(result.mutable_data().data() + destination_offset, input.data().data() + source_offset,
                         head_bytes);
         }
@@ -143,8 +121,8 @@ tensors::Tensor merge_heads(const tensors::TensorView& input, std::string_view r
 
 tensors::Tensor repeat_heads(const tensors::TensorView& input, std::size_t target_head_count,
                              std::string_view result_name) {
-    if (input.tensor_info().dtype != tensors::DType::F32 || input.tensor_info().shape.rank() != 3) {
-        throw std::invalid_argument("repeat_heads requires a rank-3 f32 tensor.");
+    if (input.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("repeat_heads requires a rank-3 tensor.");
     }
 
     const auto& dims = input.tensor_info().shape.dims();
@@ -157,12 +135,12 @@ tensors::Tensor repeat_heads(const tensors::TensorView& input, std::size_t targe
     }
 
     auto result = tensors::Tensor::zeros(make_result_info(
-        result_name, tensors::DType::F32,
+        result_name, input.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(target_head_count), static_cast<std::int64_t>(sequence_length),
                         static_cast<std::int64_t>(head_dim)})));
 
     const auto repeat_count = target_head_count / input_head_count;
-    const auto bytes_per_head = sequence_length * head_dim * sizeof(float);
+    const auto bytes_per_head = sequence_length * head_dim * tensors::element_size_bytes(input.tensor_info().dtype);
     for (std::size_t head_index = 0; head_index < target_head_count; ++head_index) {
         const auto source_head_index = head_index / repeat_count;
         std::memcpy(result.mutable_data().data() + head_index * bytes_per_head,
@@ -210,7 +188,7 @@ void validate_qwen_attention_inputs(const tensors::TensorView& hidden_states, co
         throw std::invalid_argument("qwen_attention requires a positive finite rope base.");
     }
 
-    validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_attention");
+    cppinf::ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_attention");
     const auto dtype = hidden_states.tensor_info().dtype;
     if (dtype != weights.q_proj_weight.tensor_info().dtype || dtype != weights.q_norm_weight.tensor_info().dtype ||
         dtype != weights.k_proj_weight.tensor_info().dtype || dtype != weights.k_norm_weight.tensor_info().dtype ||
@@ -246,26 +224,12 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
     validate_qwen_attention_inputs(hidden_states, weights, num_attention_heads, num_key_value_heads, head_dim,
                                    norm_epsilon, rope_base);
 
-    std::optional<tensors::Tensor> hidden_states_storage;
-    std::optional<tensors::Tensor> q_proj_weight_storage;
-    std::optional<tensors::Tensor> q_norm_weight_storage;
-    std::optional<tensors::Tensor> k_proj_weight_storage;
-    std::optional<tensors::Tensor> k_norm_weight_storage;
-    std::optional<tensors::Tensor> v_proj_weight_storage;
-    std::optional<tensors::Tensor> o_proj_weight_storage;
+    // Project hidden states into query, key, and value channels.
+    const auto query_projection = linear_project(hidden_states, weights.q_proj_weight);
+    const auto key_projection = linear_project(hidden_states, weights.k_proj_weight);
+    const auto value_projection = linear_project(hidden_states, weights.v_proj_weight);
 
-    const auto hidden_states_f32 = maybe_cast_to_f32(hidden_states, hidden_states_storage);
-    const auto q_proj_weight_f32 = maybe_cast_to_f32(weights.q_proj_weight, q_proj_weight_storage);
-    const auto q_norm_weight_f32 = maybe_cast_to_f32(weights.q_norm_weight, q_norm_weight_storage);
-    const auto k_proj_weight_f32 = maybe_cast_to_f32(weights.k_proj_weight, k_proj_weight_storage);
-    const auto k_norm_weight_f32 = maybe_cast_to_f32(weights.k_norm_weight, k_norm_weight_storage);
-    const auto v_proj_weight_f32 = maybe_cast_to_f32(weights.v_proj_weight, v_proj_weight_storage);
-    const auto o_proj_weight_f32 = maybe_cast_to_f32(weights.o_proj_weight, o_proj_weight_storage);
-
-    const auto query_projection = linear_project(hidden_states_f32, q_proj_weight_f32);
-    const auto key_projection = linear_project(hidden_states_f32, k_proj_weight_f32);
-    const auto value_projection = linear_project(hidden_states_f32, v_proj_weight_f32);
-
+    // Layout-only reshapes keep the current tensor dtype untouched.
     const auto query_heads =
         split_heads(query_projection.view(), num_attention_heads, head_dim, "qwen_attention_query_heads");
     const auto key_heads =
@@ -273,24 +237,19 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
     const auto value_heads =
         split_heads(value_projection.view(), num_key_value_heads, head_dim, "qwen_attention_value_heads");
 
-    const auto normalized_query = cppinf::ops::rms_norm(query_heads.view(), q_norm_weight_f32, norm_epsilon);
-    const auto normalized_key = cppinf::ops::rms_norm(key_heads.view(), k_norm_weight_f32, norm_epsilon);
+    // Apply q/k RMSNorm and rotate positions before grouped-KV expansion.
+    const auto normalized_query = cppinf::ops::rms_norm(query_heads.view(), weights.q_norm_weight, norm_epsilon);
+    const auto normalized_key = cppinf::ops::rms_norm(key_heads.view(), weights.k_norm_weight, norm_epsilon);
     const auto rotated_query = apply_rope(normalized_query.view(), sequence_position_offset, rope_base);
     const auto rotated_key = apply_rope(normalized_key.view(), sequence_position_offset, rope_base);
     const auto repeated_key = repeat_heads(rotated_key.view(), num_attention_heads, "qwen_attention_key_repeat");
     const auto repeated_value = repeat_heads(value_heads.view(), num_attention_heads, "qwen_attention_value_repeat");
 
+    // Attend each query head over the causal prefix, then pack heads back together.
     const auto attention_output =
         causal_self_attention(rotated_query.view(), repeated_key.view(), repeated_value.view());
     const auto merged_attention = merge_heads(attention_output.view(), "qwen_attention_merged_heads");
-    auto result_f32 = linear_project(merged_attention.view(), o_proj_weight_f32);
-
-    if (hidden_states.tensor_info().dtype == tensors::DType::F32) {
-        return rename_tensor("qwen_attention_result", result_f32);
-    }
-
-    return rename_tensor("qwen_attention_result",
-                         cppinf::ops::cast(result_f32.view(), hidden_states.tensor_info().dtype));
+    return rename_tensor("qwen_attention_result", linear_project(merged_attention.view(), weights.o_proj_weight));
 }
 
 } // namespace cppinf::nn

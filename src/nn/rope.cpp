@@ -3,7 +3,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
@@ -12,6 +11,8 @@
 
 #include <fmt/format.h>
 
+#include "ops/one_dnn_utils.h"
+#include "ops/op_utils.h"
 #include "ops/tensor_ops.h"
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
@@ -42,52 +43,13 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     return value;
 }
 
-void validate_supported_float_dtype(tensors::DType dtype, std::string_view op_name) {
-    switch (dtype) {
-    case tensors::DType::BF16:
-    case tensors::DType::F32:
-        return;
-    case tensors::DType::F16:
-    case tensors::DType::I32:
-    case tensors::DType::I64:
-    case tensors::DType::U8:
-        throw std::invalid_argument(fmt::format("{} currently supports only f32 and bf16 tensors.", op_name));
-    }
-
-    throw std::invalid_argument(fmt::format("{} received an unsupported dtype.", op_name));
-}
-
-tensors::TensorView maybe_cast_to_f32(const tensors::TensorView& input, std::optional<tensors::Tensor>& storage) {
-    if (input.tensor_info().dtype == tensors::DType::F32) {
-        return input;
-    }
-
-    storage.emplace(cppinf::ops::cast(input, tensors::DType::F32));
-    return storage->view();
-}
-
-float load_f32(std::span<const std::byte> bytes, std::size_t index) {
-    float value = 0.0f;
-    std::memcpy(&value, bytes.data() + index * sizeof(float), sizeof(float));
-    return value;
-}
-
-void store_f32(std::span<std::byte> bytes, std::size_t index, float value) {
-    std::memcpy(bytes.data() + index * sizeof(float), &value, sizeof(float));
-}
-
 std::size_t flat_index(std::size_t head_index, std::size_t sequence_index, std::size_t feature_index,
                        std::size_t sequence_length, std::size_t feature_count) {
     return ((head_index * sequence_length) + sequence_index) * feature_count + feature_index;
 }
 
-tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
-    return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
-                           std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
-}
-
 void validate_rope_input(const tensors::TensorView& input, float rope_base) {
-    validate_supported_float_dtype(input.tensor_info().dtype, "apply_rope");
+    cppinf::ops::detail::validate_supported_float_dtype(input.tensor_info().dtype, "apply_rope");
     if (input.tensor_info().shape.rank() != 3) {
         throw std::invalid_argument("apply_rope requires a rank-3 tensor.");
     }
@@ -116,14 +78,17 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
     const auto half_head_size = head_size / 2;
 
     std::optional<tensors::Tensor> input_storage;
-    const auto input_f32 = maybe_cast_to_f32(input, input_storage);
+    const auto input_f32 =
+        cppinf::ops::detail::maybe_cast_to_dtype(input, tensors::DType::F32, input_storage, "rope_result");
 
     std::vector<float> inverse_frequencies;
     inverse_frequencies.reserve(half_head_size);
     for (std::size_t pair_index = 0; pair_index < half_head_size; ++pair_index) {
-        inverse_frequencies.push_back(std::pow(rope_base, -static_cast<float>(pair_index) / static_cast<float>(half_head_size)));
+        inverse_frequencies.push_back(
+            std::pow(rope_base, -static_cast<float>(pair_index) / static_cast<float>(half_head_size)));
     }
 
+    // RoPE computes angles in f32, then returns to the caller's dtype at the helper boundary.
     auto result_f32 =
         tensors::Tensor::zeros(make_result_info("rope_result", tensors::DType::F32, input.tensor_info().shape));
 
@@ -135,25 +100,24 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
                 const auto cosine = std::cos(angle);
                 const auto sine = std::sin(angle);
 
-                const auto first_index =
-                    flat_index(head_index, sequence_index, pair_index, sequence_length, head_size);
+                const auto first_index = flat_index(head_index, sequence_index, pair_index, sequence_length, head_size);
                 const auto second_index =
                     flat_index(head_index, sequence_index, pair_index + half_head_size, sequence_length, head_size);
 
-                const auto first_value = load_f32(input_f32.data(), first_index);
-                const auto second_value = load_f32(input_f32.data(), second_index);
+                const auto first_value =
+                    cppinf::ops::detail::load_float_value(input_f32.tensor_info().dtype, input_f32.data(), first_index);
+                const auto second_value = cppinf::ops::detail::load_float_value(input_f32.tensor_info().dtype,
+                                                                                input_f32.data(), second_index);
 
-                store_f32(result_f32.mutable_data(), first_index, first_value * cosine - second_value * sine);
-                store_f32(result_f32.mutable_data(), second_index, second_value * cosine + first_value * sine);
+                cppinf::ops::detail::store_float_value(tensors::DType::F32, result_f32.mutable_data(), first_index,
+                                                       first_value * cosine - second_value * sine);
+                cppinf::ops::detail::store_float_value(tensors::DType::F32, result_f32.mutable_data(), second_index,
+                                                       second_value * cosine + first_value * sine);
             }
         }
     }
 
-    if (input.tensor_info().dtype == tensors::DType::F32) {
-        return result_f32;
-    }
-
-    return rename_tensor("rope_result", cppinf::ops::cast(result_f32.view(), input.tensor_info().dtype));
+    return cppinf::ops::detail::maybe_cast_result(std::move(result_f32), input.tensor_info().dtype, "rope_result");
 }
 
 } // namespace cppinf::nn
