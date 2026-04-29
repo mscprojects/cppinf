@@ -110,20 +110,8 @@ TEST_F(CausalSelfAttentionTest, GivenSingleTokenHead_WhenApplyingCausalSelfAtten
 
 TEST_F(CausalSelfAttentionTest,
        GivenTorchOracleF32Inputs_WhenApplyingCausalSelfAttention_ThenExpectedValuesAreReturned) {
-    // Golden values generated offline with:
-    // uv run --with torch==2.11.0 python - <<'PY'
-    // import torch
-    // q = torch.tensor([[[0.5, -1.0], [1.25, 0.75], [-0.5, 2.0]], [[1.5, 0.5], [-1.0, 1.0], [0.25, -0.75]]],
-    //                  dtype=torch.float32)
-    // k = torch.tensor([[[1.0, 0.0], [0.5, -1.5], [-0.75, 1.25]], [[0.25, 1.5], [-1.25, 0.5], [1.0, -0.5]]],
-    //                  dtype=torch.float32)
-    // v = torch.tensor([[[2.0, -1.0], [0.5, 1.5], [-1.25, 0.75]], [[-0.5, 2.0], [1.75, -1.25], [0.25, 0.5]]],
-    //                  dtype=torch.float32)
-    // scores = torch.matmul(q, k.transpose(-1, -2)) * (q.shape[-1] ** -0.5)
-    // scores = scores.masked_fill(torch.triu(torch.ones(q.shape[-2], k.shape[-2], dtype=torch.bool), diagonal=1),
-    //                             float('-inf'))
-    // print(repr(torch.matmul(torch.softmax(scores, dim=-1), v).tolist()))
-    // PY
+    // Golden values generated with tests/nn/causal_self_attention_oracle.py.
+    // Case: f32_full_sequence.
     const auto query = make_f32_tensor(
         "query", {2, 3, 2}, {0.5f, -1.0f, 1.25f, 0.75f, -0.5f, 2.0f, 1.5f, 0.5f, -1.0f, 1.0f, 0.25f, -0.75f});
     const auto key = make_f32_tensor("key", {2, 3, 2},
@@ -144,23 +132,8 @@ TEST_F(CausalSelfAttentionTest,
 
 TEST_F(CausalSelfAttentionTest,
        GivenTorchOracleBf16InputsWithPast_WhenApplyingCausalSelfAttention_ThenExpectedValuesAreReturned) {
-    // Golden values generated offline with:
-    // uv run --with torch==2.11.0 python - <<'PY'
-    // import torch
-    // q = torch.tensor([[[1.0, -0.5], [0.25, 1.5]], [[-1.25, 0.75], [1.5, -0.25]]], dtype=torch.bfloat16)
-    // k = torch.tensor([[[0.5, -1.0], [1.25, 0.5], [-0.75, 1.5], [1.0, -0.25]],
-    //                   [[-0.5, 1.0], [1.5, -1.25], [0.75, 0.25], [-1.0, 0.5]]], dtype=torch.bfloat16)
-    // v = torch.tensor([[[1.0, 0.5], [-1.5, 0.75], [0.25, -0.5], [1.75, 1.25]],
-    //                   [[-0.75, 1.5], [1.25, -0.25], [0.5, 0.75], [-1.5, 1.0]]], dtype=torch.bfloat16)
-    // qf, kf, vf = q.float(), k.float(), v.float()
-    // scores = torch.matmul(qf, kf.transpose(-1, -2)) * (q.shape[-1] ** -0.5)
-    // mask = torch.ones(q.shape[-2], k.shape[-2], dtype=torch.bool)
-    // past = 2
-    // for qi in range(q.shape[-2]):
-    //     mask[qi, : past + qi + 1] = False
-    // scores = scores.masked_fill(mask, float('-inf'))
-    // print(repr(torch.matmul(torch.softmax(scores, dim=-1), vf).to(torch.bfloat16).float().tolist()))
-    // PY
+    // Golden values generated with tests/nn/causal_self_attention_oracle.py.
+    // Case: bf16_with_past.
     const auto query = make_bf16_tensor("query", {2, 2, 2}, {1.0f, -0.5f, 0.25f, 1.5f, -1.25f, 0.75f, 1.5f, -0.25f});
     const auto key = make_bf16_tensor(
         "key", {2, 4, 2},

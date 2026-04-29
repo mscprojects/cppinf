@@ -75,13 +75,17 @@ set(CPPINF_SOURCES
     src/loaders/hf/hf_config.cpp
     src/loaders/hf/hf_config.h
     src/loaders/hf/hf_model_files.cpp
-    src/loaders/hf/hf_model_files.h
-    src/loaders/hf/hf_model_summary.cpp
-    src/loaders/hf/hf_model_summary.h
-    src/nn/causal_self_attention.cpp
-    src/nn/causal_self_attention.h
-    src/ops/elementwise_ops.cpp
-    src/ops/elementwise_ops.h
+     src/loaders/hf/hf_model_files.h
+     src/loaders/hf/hf_model_summary.cpp
+     src/loaders/hf/hf_model_summary.h
+     src/nn/causal_self_attention.cpp
+     src/nn/causal_self_attention.h
+     src/nn/qwen_attention.cpp
+     src/nn/qwen_attention.h
+     src/nn/rope.cpp
+     src/nn/rope.h
+     src/ops/elementwise_ops.cpp
+     src/ops/elementwise_ops.h
     src/ops/matmul.cpp
     src/ops/matmul.h
     src/ops/nn_ops.cpp
@@ -120,12 +124,14 @@ if(BUILD_TESTING)
         tests/cli/cli_app_test.cpp
         tests/files/safetensors_file_test.cpp
         tests/loaders/hf/hf_config_test.cpp
-        tests/loaders/hf/hf_model_files_test.cpp
-        tests/loaders/hf/hf_model_summary_test.cpp
-        tests/nn/causal_self_attention_test.cpp
-        tests/ops/ops_test.cpp
-        tests/tensors/tensor_test.cpp
-    )
+         tests/loaders/hf/hf_model_files_test.cpp
+         tests/loaders/hf/hf_model_summary_test.cpp
+         tests/nn/causal_self_attention_test.cpp
+         tests/nn/qwen_attention_test.cpp
+         tests/nn/rope_test.cpp
+         tests/ops/ops_test.cpp
+         tests/tensors/tensor_test.cpp
+     )
     target_include_directories(cppinf_tests PRIVATE
         ${PROJECT_SOURCE_DIR}/src
         ${PROJECT_SOURCE_DIR}/tests
