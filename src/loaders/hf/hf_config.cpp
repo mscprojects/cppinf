@@ -81,10 +81,6 @@ std::vector<std::string> read_architectures(const json& value) {
 }
 
 tensors::DType parse_torch_dtype(std::string_view torch_dtype) {
-    if (torch_dtype == "float16") {
-        return tensors::DType::F16;
-    }
-
     if (torch_dtype == "bfloat16") {
         return tensors::DType::BF16;
     }
@@ -93,19 +89,8 @@ tensors::DType parse_torch_dtype(std::string_view torch_dtype) {
         return tensors::DType::F32;
     }
 
-    if (torch_dtype == "int32") {
-        return tensors::DType::I32;
-    }
-
-    if (torch_dtype == "int64") {
-        return tensors::DType::I64;
-    }
-
-    if (torch_dtype == "uint8") {
-        return tensors::DType::U8;
-    }
-
-    throw std::invalid_argument(fmt::format("Unsupported HF torch_dtype '{}'.", torch_dtype));
+    throw std::invalid_argument(
+        fmt::format("Unsupported HF torch_dtype '{}'. Only bfloat16 and float32 are supported.", torch_dtype));
 }
 
 } // namespace detail

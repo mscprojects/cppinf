@@ -58,7 +58,7 @@ class HfModelFilesTest : public ::testing::Test {
             std::byte{0x02},
             std::byte{0x03},
         };
-        const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
+        const std::string header = R"({"weights":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}})";
         write_binary_file("model.safetensors", file_test_utils::make_safetensors_file_bytes(header, tensor_data));
     }
 

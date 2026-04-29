@@ -37,7 +37,7 @@ TEST_F(SafetensorsFileTest, GivenValidFileBytes_WhenLoading_ThenMetadataAndTenso
         std::byte{0x1f}, std::byte{0x20}, std::byte{0x21}, std::byte{0x22}, std::byte{0x23},
     };
     const std::string header =
-        R"({"__metadata__":{"format":"pt"},"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"token_ids":{"dtype":"U8","shape":[4],"data_offsets":[16,20]}})";
+        R"({"__metadata__":{"format":"pt"},"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"tail":{"dtype":"F32","shape":[1],"data_offsets":[16,20]}})";
 
     const auto file = SafetensorsFile::from_bytes(file_test_utils::make_safetensors_file_bytes(header, tensor_data));
 
@@ -50,9 +50,10 @@ TEST_F(SafetensorsFileTest, GivenValidFileBytes_WhenLoading_ThenMetadataAndTenso
     EXPECT_EQ(std::size_t{16}, embed.byte_size());
     EXPECT_EQ(std::size_t{0}, embed.byte_offset);
 
-    const auto& token_ids = file.tensor_info("token_ids");
-    EXPECT_EQ(DType::U8, token_ids.dtype);
-    EXPECT_EQ(std::size_t{16}, token_ids.byte_offset);
+    const auto& tail = file.tensor_info("tail");
+    EXPECT_EQ(DType::F32, tail.dtype);
+    EXPECT_EQ(std::size_t{4}, tail.byte_size());
+    EXPECT_EQ(std::size_t{16}, tail.byte_offset);
 }
 
 TEST_F(SafetensorsFileTest, GivenTensorName_WhenCreatingView_ThenViewPointsIntoOwnedBytes) {
@@ -62,7 +63,7 @@ TEST_F(SafetensorsFileTest, GivenTensorName_WhenCreatingView_ThenViewPointsIntoO
         std::byte{0x2c},
         std::byte{0x2d},
     };
-    const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
+    const std::string header = R"({"weights":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}})";
 
     const auto file = SafetensorsFile::from_bytes(file_test_utils::make_safetensors_file_bytes(header, tensor_data));
     const auto view = file.tensor_view("weights");
@@ -79,7 +80,7 @@ TEST_F(SafetensorsFileTest, GivenUnknownTensor_WhenQueryingTensorInfo_ThenItThro
         std::byte{0x02},
         std::byte{0x03},
     };
-    const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
+    const std::string header = R"({"weights":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}})";
 
     const auto file = SafetensorsFile::from_bytes(file_test_utils::make_safetensors_file_bytes(header, tensor_data));
 
@@ -93,19 +94,32 @@ TEST_F(SafetensorsFileTest, GivenFilePath_WhenLoading_ThenFileBytesAreParsed) {
         std::byte{0x02},
         std::byte{0x03},
     };
-    const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
+    const std::string header = R"({"weights":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}})";
 
     const auto path = write_temp_file(file_test_utils::make_safetensors_file_bytes(header, tensor_data));
     const auto file = SafetensorsFile::from_file(path);
 
     EXPECT_TRUE(file.contains_tensor("weights"));
-    EXPECT_EQ(DType::U8, file.tensor_info("weights").dtype);
+    EXPECT_EQ(DType::F32, file.tensor_info("weights").dtype);
 }
 
 TEST_F(SafetensorsFileTest, GivenInvalidTensorRange_WhenLoading_ThenItThrows) {
     const std::array<std::byte, 2> tensor_data{
         std::byte{0x00},
         std::byte{0x01},
+    };
+    const std::string header = R"({"weights":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}})";
+
+    EXPECT_THROW(SafetensorsFile::from_bytes(file_test_utils::make_safetensors_file_bytes(header, tensor_data)),
+                 std::invalid_argument);
+}
+
+TEST_F(SafetensorsFileTest, GivenNotFullySupportedTensorDtype_WhenLoading_ThenItThrows) {
+    const std::array<std::byte, 4> tensor_data{
+        std::byte{0x00},
+        std::byte{0x01},
+        std::byte{0x02},
+        std::byte{0x03},
     };
     const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
 

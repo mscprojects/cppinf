@@ -59,29 +59,6 @@ tensors::Tensor transpose_2d(const tensors::TensorView& input) {
         throw std::invalid_argument("transpose_2d requires a rank-2 tensor.");
     }
 
-    if (input.tensor_info().dtype == tensors::DType::I64) {
-        const auto& dims = input.tensor_info().shape.dims();
-        const std::size_t rows = checked_dim_to_size(dims[0], "transpose_2d rows");
-        const std::size_t cols = checked_dim_to_size(dims[1], "transpose_2d cols");
-        const std::size_t element_size = tensors::element_size_bytes(input.tensor_info().dtype);
-
-        auto result =
-            detail::make_result_tensor("transpose_2d_result", input.tensor_info().dtype,
-                                       tensors::Shape({checked_size_to_dim(cols, "transpose_2d output cols"),
-                                                       checked_size_to_dim(rows, "transpose_2d output rows")}));
-
-        for (std::size_t row = 0; row < rows; ++row) {
-            for (std::size_t col = 0; col < cols; ++col) {
-                const std::size_t source_index = row * cols + col;
-                const std::size_t destination_index = col * rows + row;
-                std::memcpy(result.mutable_data().data() + destination_index * element_size,
-                            input.data().data() + source_index * element_size, element_size);
-            }
-        }
-
-        return result;
-    }
-
     const auto& dims = input.tensor_info().shape.dims();
     const dnnl::memory::dims transposed_dims = {
         static_cast<dnnl::memory::dim>(dims[1]),

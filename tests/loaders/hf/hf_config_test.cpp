@@ -63,7 +63,7 @@ TEST_F(HfConfigTest, GivenMissingField_WhenParsing_ThenItThrows) {
     EXPECT_THROW(HfConfig::from_json_text(json_text), std::invalid_argument);
 }
 
-TEST_F(HfConfigTest, GivenUnsupportedTorchDtype_WhenParsing_ThenItThrows) {
+TEST_F(HfConfigTest, GivenNotFullySupportedTorchDtype_WhenParsing_ThenItThrows) {
     const std::string json_text = R"({
         "architectures": ["Qwen3ForCausalLM"],
         "bos_token_id": 151643,
@@ -79,7 +79,7 @@ TEST_F(HfConfigTest, GivenUnsupportedTorchDtype_WhenParsing_ThenItThrows) {
         "rms_norm_eps": 1e-6,
         "rope_theta": 1000000,
         "tie_word_embeddings": true,
-        "torch_dtype": "float64",
+        "torch_dtype": "float16",
         "vocab_size": 151936
     })";
 
