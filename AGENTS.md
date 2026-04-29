@@ -19,3 +19,4 @@ When working in this repository:
 - For GoogleTest, name fixtures after the file subject, for example `TensorTest`.
 - For GoogleTest test names, use Gherkin-style `Given_When_Then`.
 - Prefer whole-struct equality assertions with `operator==` over many field-by-field `EXPECT_EQ`s when practical.
+- Run `just commit` before creating a git commit.
