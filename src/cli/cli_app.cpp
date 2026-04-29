@@ -94,13 +94,32 @@ std::int64_t select_argmax_token_id(const tensors::Tensor& logits) {
     return best_token_id;
 }
 
-std::string run_hf_generation(const RunHfOptions& options) {
+void stream_generated_text(const OutputWriter& output_writer, std::string_view previous_text, std::string_view current_text) {
+    if (!output_writer || current_text.size() <= previous_text.size()) {
+        return;
+    }
+    if (!current_text.starts_with(previous_text)) {
+        return;
+    }
+
+    const auto suffix = current_text.substr(previous_text.size());
+    if (!suffix.empty()) {
+        output_writer(suffix);
+    }
+}
+
+std::string run_hf_generation(const RunHfOptions& options, const OutputWriter& output_writer) {
     const auto tokenizer = tokenizers::hf::HfTokenizer::from_dir(options.model_dir);
     const auto model = models::qwen3::Qwen3Model::from_dir(options.model_dir);
 
     auto token_ids = tokenizer.encode(options.prompt);
     if (token_ids.empty()) {
         throw std::invalid_argument("run hf requires a prompt that encodes to at least one token.");
+    }
+
+    auto decoded_text = tokenizer.decode(token_ids);
+    if (output_writer && !decoded_text.empty()) {
+        output_writer(decoded_text);
     }
 
     const auto eos_token_id = tokenizer.eos_token_id();
@@ -111,14 +130,22 @@ std::string run_hf_generation(const RunHfOptions& options) {
             break;
         }
         token_ids.push_back(next_token_id);
+
+        const auto next_decoded_text = tokenizer.decode(token_ids);
+        stream_generated_text(output_writer, decoded_text, next_decoded_text);
+        decoded_text = std::move(next_decoded_text);
     }
 
-    return tokenizer.decode(token_ids);
+    return decoded_text;
 }
 
 } // namespace detail
 
 CliResult run(std::span<const std::string_view> args) {
+    return run_with_output_writer(args, {});
+}
+
+CliResult run_with_output_writer(std::span<const std::string_view> args, const OutputWriter& output_writer) {
     if (args.empty()) {
         return CliResult{
             .exit_code = 0,
@@ -178,9 +205,10 @@ CliResult run(std::span<const std::string_view> args) {
         }
 
         if (run_hf_subcommand->parsed()) {
+            const auto decoded_text = detail::run_hf_generation(run_hf_options, output_writer);
             return CliResult{
                 .exit_code = 0,
-                .output = fmt::format("{}\n", detail::run_hf_generation(run_hf_options)),
+                .output = output_writer ? std::string("\n") : fmt::format("{}\n", decoded_text),
             };
         }
     } catch (const std::exception& error) {

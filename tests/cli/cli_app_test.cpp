@@ -16,6 +16,7 @@
 
 using cppinf::cli::CliResult;
 using cppinf::cli::run;
+using cppinf::cli::run_with_output_writer;
 
 class CliAppTest : public ::testing::Test {
   protected:
@@ -334,4 +335,17 @@ TEST_F(CliAppTest, GivenRunHfArguments_WhenEosIsMostLikelyNextToken_ThenGenerati
     EXPECT_EQ(0, result.exit_code);
     EXPECT_EQ("B\n", result.output);
     EXPECT_EQ(std::string::npos, result.output.find("<|endoftext|>"));
+}
+
+TEST_F(CliAppTest, GivenRunHfArgumentsAndWriter_WhenGenerating_ThenPromptAndNewTextAreStreamed) {
+    write_tiny_generation_model_dir();
+    const auto model_dir_path = model_dir().string();
+    const std::string_view args[] = {"run", "hf", model_dir_path, "--prompt", "A", "--max-new-tokens", "1"};
+
+    std::string streamed_output;
+    const auto result = run_with_output_writer(args, [&](std::string_view chunk) { streamed_output += chunk; });
+
+    EXPECT_EQ(0, result.exit_code);
+    EXPECT_EQ("\n", result.output);
+    EXPECT_EQ("AB", streamed_output);
 }
