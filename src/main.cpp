@@ -13,9 +13,13 @@ int main(int argc, char* argv[]) {
         args.push_back(argv[index]);
     }
 
-    const auto result = cppinf::cli::run(args);
+    const auto result = cppinf::cli::run_with_output_writer(args, [](std::string_view chunk) {
+        fmt::print("{}", chunk);
+        std::fflush(stdout);
+    });
     if (result.exit_code == 0) {
         fmt::print("{}", result.output);
+        std::fflush(stdout);
     } else {
         fmt::print(stderr, "{}", result.output);
     }
