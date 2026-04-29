@@ -1,9 +1,6 @@
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <fstream>
-#include <initializer_list>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -13,19 +10,19 @@
 #include <nlohmann/json.hpp>
 
 #include "models/qwen3/qwen3_model.h"
-#include "tensors/bfloat16.h"
 #include "tensors/tensor.h"
 #include "test_file_utils.h"
+#include "test_safetensors_utils.h"
 #include "test_temp_dir.h"
 #include "test_tensor_utils.h"
 
 namespace cppinf::tests {
 
 using models::qwen3::Qwen3Model;
+using safetensors_test_utils::append_bf16_matrix;
+using safetensors_test_utils::append_bf16_vector;
 using tensor_test_utils::expect_float_values_near;
-using tensors::bfloat16_bits_to_float;
 using tensors::DType;
-using tensors::float_to_bfloat16_bits;
 using tensors::Shape;
 using tensors::Tensor;
 
@@ -268,53 +265,6 @@ class Qwen3ModelTest : public ::testing::Test {
 
         const auto header_text = header.dump();
         write_binary_file("model.safetensors", file_test_utils::make_safetensors_file_bytes(header_text, tensor_data));
-    }
-
-    void append_bf16_vector(ordered_json& header, std::vector<std::byte>& tensor_data, std::string_view name,
-                            std::initializer_list<float> values) {
-        append_bf16_tensor(header, tensor_data, name, {static_cast<std::int64_t>(values.size())},
-                           std::vector<float>(values));
-    }
-
-    void append_bf16_matrix(ordered_json& header, std::vector<std::byte>& tensor_data, std::string_view name,
-                            std::initializer_list<std::initializer_list<float>> rows) {
-        if (rows.size() == 0) {
-            throw std::invalid_argument("append_bf16_matrix requires at least one row.");
-        }
-
-        const auto column_count = rows.begin()->size();
-        if (column_count == 0) {
-            throw std::invalid_argument("append_bf16_matrix requires at least one column.");
-        }
-
-        std::vector<float> values;
-        values.reserve(rows.size() * column_count);
-        for (const auto& row : rows) {
-            if (row.size() != column_count) {
-                throw std::invalid_argument("append_bf16_matrix requires rows with equal width.");
-            }
-            values.insert(values.end(), row.begin(), row.end());
-        }
-
-        append_bf16_tensor(header, tensor_data, name,
-                           {static_cast<std::int64_t>(rows.size()), static_cast<std::int64_t>(column_count)}, values);
-    }
-
-    void append_bf16_tensor(ordered_json& header, std::vector<std::byte>& tensor_data, std::string_view name,
-                            const std::vector<std::int64_t>& dims, const std::vector<float>& values) {
-        const auto begin_offset = tensor_data.size();
-        for (const auto value : values) {
-            const auto bits = float_to_bfloat16_bits(value);
-            const auto* bytes = reinterpret_cast<const std::byte*>(&bits);
-            tensor_data.insert(tensor_data.end(), bytes, bytes + sizeof(bits));
-        }
-        const auto end_offset = tensor_data.size();
-
-        header[std::string(name)] = ordered_json{
-            {"dtype", "BF16"},
-            {"shape", dims},
-            {"data_offsets", {begin_offset, end_offset}},
-        };
     }
 
     void write_text_file(std::string_view file_name, std::string_view contents) const {
