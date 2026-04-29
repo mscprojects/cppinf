@@ -50,12 +50,15 @@ std::optional<std::string> token_content_from_config(const json& config, std::st
     if (iterator == config.end()) {
         return std::nullopt;
     }
+
     if (iterator->is_null()) {
         return std::nullopt;
     }
+
     if (iterator->is_string()) {
         return iterator->get<std::string>();
     }
+
     if (iterator->is_object()) {
         const auto content_iterator = iterator->find("content");
         if (content_iterator != iterator->end() && content_iterator->is_string()) {
@@ -76,6 +79,7 @@ char32_t codepoint_from_utf8(std::string_view text, std::size_t offset, std::siz
         *length_out = 1;
         return lead;
     }
+
     if ((lead & 0xe0U) == 0xc0U) {
         *length_out = 2;
         if (offset + *length_out > text.size()) {
@@ -84,6 +88,7 @@ char32_t codepoint_from_utf8(std::string_view text, std::size_t offset, std::siz
         return (static_cast<char32_t>(lead & 0x1fU) << 6) |
                static_cast<char32_t>(static_cast<unsigned char>(text[offset + 1]) & 0x3fU);
     }
+
     if ((lead & 0xf0U) == 0xe0U) {
         *length_out = 3;
         if (offset + *length_out > text.size()) {
@@ -93,6 +98,7 @@ char32_t codepoint_from_utf8(std::string_view text, std::size_t offset, std::siz
                (static_cast<char32_t>(static_cast<unsigned char>(text[offset + 1]) & 0x3fU) << 6) |
                static_cast<char32_t>(static_cast<unsigned char>(text[offset + 2]) & 0x3fU);
     }
+
     if ((lead & 0xf8U) == 0xf0U) {
         *length_out = 4;
         if (offset + *length_out > text.size()) {
@@ -113,17 +119,20 @@ std::string utf8_from_codepoint(char32_t codepoint) {
         utf8.push_back(static_cast<char>(codepoint));
         return utf8;
     }
+
     if (codepoint <= 0x7ff) {
         utf8.push_back(static_cast<char>(0xc0U | ((codepoint >> 6) & 0x1fU)));
         utf8.push_back(static_cast<char>(0x80U | (codepoint & 0x3fU)));
         return utf8;
     }
+
     if (codepoint <= 0xffff) {
         utf8.push_back(static_cast<char>(0xe0U | ((codepoint >> 12) & 0x0fU)));
         utf8.push_back(static_cast<char>(0x80U | ((codepoint >> 6) & 0x3fU)));
         utf8.push_back(static_cast<char>(0x80U | (codepoint & 0x3fU)));
         return utf8;
     }
+
     if (codepoint <= 0x10ffff) {
         utf8.push_back(static_cast<char>(0xf0U | ((codepoint >> 18) & 0x07U)));
         utf8.push_back(static_cast<char>(0x80U | ((codepoint >> 12) & 0x3fU)));
@@ -225,6 +234,7 @@ std::size_t match_contraction_length(std::string_view text, std::size_t offset) 
                 break;
             }
         }
+
         if (matches) {
             return contraction.size();
         }
@@ -261,11 +271,13 @@ void validate_supported_tokenizer_json(const json& tokenizer_json) {
         throw std::invalid_argument(
             "Only HF tokenizer.json files with split + bytelevel pre-tokenizers are supported.");
     }
+
     if (read_string(pretokenizers[0].at("type"), "pre_tokenizer[0].type") != "Split" ||
         read_string(pretokenizers[1].at("type"), "pre_tokenizer[1].type") != "ByteLevel") {
         throw std::invalid_argument(
             "Only HF tokenizer.json files with split + bytelevel pre-tokenizers are supported.");
     }
+
     if (read_string(pretokenizers[0].at("pattern").at("Regex"), "pre_tokenizer[0].pattern.Regex") !=
         k_qwen_split_pattern) {
         throw std::invalid_argument("Only the Qwen/GPT byte-level split pattern is supported.");
@@ -554,6 +566,7 @@ std::vector<std::string> HfTokenizer::pretokenize(std::string_view text) const {
         while (newline_scan < text.size() && is_space_not_newline(static_cast<unsigned char>(text[newline_scan]))) {
             ++newline_scan;
         }
+
         if (newline_scan < text.size() && is_newline(static_cast<unsigned char>(text[newline_scan]))) {
             auto end = newline_scan;
             while (end < text.size() && is_newline(static_cast<unsigned char>(text[end]))) {
@@ -612,6 +625,7 @@ std::vector<std::string> HfTokenizer::pretokenize(std::string_view text) const {
             while (end < text.size() && is_space_not_newline(static_cast<unsigned char>(text[end]))) {
                 ++end;
             }
+
             if (end < text.size() && !is_newline(static_cast<unsigned char>(text[end])) &&
                 !is_space_not_newline(static_cast<unsigned char>(text[end])) && end - offset > 1) {
                 pieces.emplace_back(text.substr(offset, end - offset - 1));
@@ -650,6 +664,7 @@ std::vector<std::string> HfTokenizer::bpe_encode(std::string_view piece) const {
             if (iterator == merge_ranks_.end()) {
                 continue;
             }
+
             if (iterator->second < best_rank) {
                 best_rank = iterator->second;
                 best_index = index;
@@ -684,6 +699,7 @@ std::optional<std::pair<std::size_t, std::int64_t>> HfTokenizer::added_token_mat
         if (offset + content.size() > text.size()) {
             continue;
         }
+
         if (text.substr(offset, content.size()) == content) {
             return std::pair{content.size(), token_id};
         }

@@ -45,6 +45,7 @@ void validate_rope_input(const tensors::TensorView& input, float rope_base) {
     if (input.tensor_info().shape.rank() != 3) {
         throw std::invalid_argument("apply_rope requires a rank-3 tensor.");
     }
+
     if (!std::isfinite(rope_base) || rope_base <= 0.0f) {
         throw std::invalid_argument("apply_rope requires a positive finite rope base.");
     }

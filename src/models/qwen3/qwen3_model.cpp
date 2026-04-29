@@ -44,13 +44,16 @@ void validate_model_config(const loaders::hf::HfConfig& config) {
     if (config.model_type != "qwen3") {
         throw std::invalid_argument("Qwen3Model requires model_type='qwen3'.");
     }
+
     if (!config.tie_word_embeddings) {
         throw std::invalid_argument("Qwen3Model currently requires tied word embeddings.");
     }
+
     if (config.num_hidden_layers == 0 || config.num_attention_heads == 0 || config.num_key_value_heads == 0 ||
         config.head_dim == 0) {
         throw std::invalid_argument("Qwen3Model requires non-zero layer and head configuration.");
     }
+
     if (config.num_attention_heads % config.num_key_value_heads != 0) {
         throw std::invalid_argument("Qwen3Model requires num_attention_heads to divide by num_key_value_heads.");
     }
@@ -101,6 +104,7 @@ tensors::Tensor embedding_lookup(const tensors::TensorView& embedding_table, std
     if (embedding_table.tensor_info().shape.rank() != 2) {
         throw std::invalid_argument("embedding_lookup requires a rank-2 embedding table.");
     }
+
     if (token_ids.empty()) {
         throw std::invalid_argument("Qwen3Model forward requires at least one token id.");
     }

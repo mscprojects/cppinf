@@ -78,6 +78,7 @@ void validate_attention_inputs(const tensors::TensorView& query, const tensors::
         query.tensor_info().dtype != value.tensor_info().dtype) {
         throw std::invalid_argument("causal_self_attention requires matching tensor dtypes.");
     }
+
     if (query.tensor_info().shape.rank() != 3 || key.tensor_info().shape.rank() != 3 ||
         value.tensor_info().shape.rank() != 3) {
         throw std::invalid_argument("causal_self_attention requires rank-3 tensors.");
@@ -100,6 +101,7 @@ void validate_attention_inputs(const tensors::TensorView& query, const tensors::
     if (key_sequence_length != value_sequence_length) {
         throw std::invalid_argument("causal_self_attention requires matching key and value sequence lengths.");
     }
+
     if (key_sequence_length != past_sequence_length + query_sequence_length) {
         throw std::invalid_argument(
             "causal_self_attention requires key/value sequence length to equal past_sequence_length + query length.");

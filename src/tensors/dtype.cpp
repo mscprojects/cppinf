@@ -25,18 +25,23 @@ DType parse_dtype(std::string_view dtype_name) {
     if (dtype_name == "F16") {
         return DType::F16;
     }
+
     if (dtype_name == "BF16") {
         return DType::BF16;
     }
+
     if (dtype_name == "F32") {
         return DType::F32;
     }
+
     if (dtype_name == "I32") {
         return DType::I32;
     }
+
     if (dtype_name == "I64") {
         return DType::I64;
     }
+
     if (dtype_name == "U8") {
         return DType::U8;
     }

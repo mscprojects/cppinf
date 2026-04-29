@@ -148,6 +148,7 @@ ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
         if (tensor_info.byte_size() != end - begin) {
             throw std::invalid_argument("Tensor byte range does not match dtype and shape.");
         }
+
         if (begin > file_bytes.size() - tensor_data_offset ||
             tensor_info.byte_size() > file_bytes.size() - tensor_data_offset - begin) {
             throw std::invalid_argument("Tensor byte range extends beyond the file data.");
