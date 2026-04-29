@@ -17,6 +17,10 @@ using cppinf::tensors::Shape;
 using cppinf::tensors::Tensor;
 using cppinf::tensors::TensorInfo;
 using cppinf::tensors::TensorView;
+using cppinf::tensors::bfloat16_bits_to_float;
+using cppinf::tensors::element_size_bytes;
+using cppinf::tensors::float_to_bfloat16_bits;
+using cppinf::tensors::to_string;
 
 class TensorTest : public ::testing::Test {
   protected:
@@ -48,14 +52,14 @@ class TensorTest : public ::testing::Test {
 };
 
 TEST_F(TensorTest, GivenBf16Type_WhenFormattingAndSizing_ThenMetadataMatches) {
-    EXPECT_EQ(std::string("bf16"), std::string(cppinf::tensors::to_string(DType::BF16)));
-    EXPECT_EQ(std::size_t{2}, cppinf::tensors::element_size_bytes(DType::BF16));
+    EXPECT_EQ(std::string("bf16"), std::string(to_string(DType::BF16)));
+    EXPECT_EQ(std::size_t{2}, element_size_bytes(DType::BF16));
 }
 
 TEST_F(TensorTest, GivenFloatValue_WhenConvertingThroughBf16_ThenExpectedBitsRoundTrip) {
-    const std::uint16_t bits = cppinf::tensors::float_to_bfloat16_bits(1.5f);
+    const std::uint16_t bits = float_to_bfloat16_bits(1.5f);
 
-    EXPECT_EQ(1.5f, cppinf::tensors::bfloat16_bits_to_float(bits));
+    EXPECT_EQ(1.5f, bfloat16_bits_to_float(bits));
 }
 
 TEST_F(TensorTest, GivenShape_WhenQueryingRankAndElements_ThenCountsAreReturned) {
@@ -63,7 +67,7 @@ TEST_F(TensorTest, GivenShape_WhenQueryingRankAndElements_ThenCountsAreReturned)
 
     EXPECT_EQ(std::size_t{3}, shape.rank());
     EXPECT_EQ(std::size_t{24}, shape.num_elements());
-    EXPECT_EQ(std::string("[2, 3, 4]"), cppinf::tensors::to_string(shape));
+    EXPECT_EQ(std::string("[2, 3, 4]"), to_string(shape));
 }
 
 TEST_F(TensorTest, GivenNegativeDimension_WhenConstructingShape_ThenItThrows) {
@@ -76,7 +80,7 @@ TEST_F(TensorTest, GivenTensorInfo_WhenFormattingMetadata_ThenStringMatches) {
     EXPECT_EQ(std::size_t{16}, tensor_info.byte_size());
     EXPECT_EQ(std::string("TensorInfo(name=\"model.embed_tokens.weight\", dtype=bf16, shape=[2, 4], "
                           "offset=128, bytes=16)"),
-              cppinf::tensors::to_string(tensor_info));
+              to_string(tensor_info));
 }
 
 TEST_F(TensorTest, GivenMatchingBytes_WhenCreatingTensorView_ThenViewExposesMetadata) {
@@ -86,7 +90,7 @@ TEST_F(TensorTest, GivenMatchingBytes_WhenCreatingTensorView_ThenViewExposesMeta
 
     EXPECT_EQ(std::size_t{16}, tensor_view.byte_size());
     EXPECT_EQ(std::string("TensorView(name=\"model.embed_tokens.weight\", dtype=bf16, shape=[2, 4], bytes=16)"),
-              cppinf::tensors::to_string(tensor_view));
+              to_string(tensor_view));
 }
 
 TEST_F(TensorTest, GivenOwnedTensor_WhenQueryingView_ThenTensorViewMatchesStorage) {
@@ -96,7 +100,7 @@ TEST_F(TensorTest, GivenOwnedTensor_WhenQueryingView_ThenTensorViewMatchesStorag
     EXPECT_EQ(std::size_t{16}, tensor.byte_size());
     EXPECT_EQ(std::size_t{16}, tensor_view.byte_size());
     EXPECT_EQ(std::string("Tensor(name=\"activation\", dtype=f32, shape=[2, 2], bytes=16)"),
-              cppinf::tensors::to_string(tensor));
+              to_string(tensor));
 }
 
 TEST_F(TensorTest, GivenNonZeroOffset_WhenCreatingTensor_ThenItThrows) {

@@ -22,6 +22,7 @@ using cppinf::tensors::bfloat16_bits_to_float;
 using cppinf::tensors::DType;
 using cppinf::tensors::float_to_bfloat16_bits;
 using cppinf::tensors::Shape;
+using cppinf::tensors::Tensor;
 
 class Qwen3ModelTest : public ::testing::Test {
   protected:
@@ -32,7 +33,7 @@ class Qwen3ModelTest : public ::testing::Test {
         write_weights_file();
     }
 
-    std::vector<float> read_bf16_values(const cppinf::tensors::Tensor& tensor) const {
+    std::vector<float> read_bf16_values(const Tensor& tensor) const {
         std::vector<float> values;
         values.reserve(tensor.tensor_info().shape.num_elements());
         for (std::size_t index = 0; index < tensor.tensor_info().shape.num_elements(); ++index) {
@@ -43,8 +44,7 @@ class Qwen3ModelTest : public ::testing::Test {
         return values;
     }
 
-    void expect_bf16_values_near(const cppinf::tensors::Tensor& tensor, std::initializer_list<float> expected,
-                                 float tolerance) const {
+    void expect_bf16_values_near(const Tensor& tensor, std::initializer_list<float> expected, float tolerance) const {
         const auto actual_values = read_bf16_values(tensor);
         ASSERT_EQ(expected.size(), actual_values.size());
 

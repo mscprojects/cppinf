@@ -60,7 +60,7 @@ void validate_qwen_decoder_block_inputs(const tensors::TensorView& hidden_states
                                         const QwenDecoderBlockWeights& weights, std::size_t num_attention_heads,
                                         std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
                                         float rope_base) {
-    cppinf::ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_decoder_block");
+    ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_decoder_block");
     if (!std::isfinite(norm_epsilon) || norm_epsilon < 0.0f) {
         throw std::invalid_argument("qwen_decoder_block requires a non-negative finite norm epsilon.");
     }
@@ -99,15 +99,15 @@ tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, con
                                        norm_epsilon, rope_base);
 
     // Residual edges stay in the public dtype, while individual kernels own any promotion they need.
-    const auto attention_input = cppinf::ops::rms_norm(hidden_states, weights.input_layernorm_weight, norm_epsilon);
+    const auto attention_input = ops::rms_norm(hidden_states, weights.input_layernorm_weight, norm_epsilon);
     const auto attention_output =
         qwen_attention(attention_input.view(), weights.attention, num_attention_heads, num_key_value_heads, head_dim,
                        norm_epsilon, sequence_position_offset, rope_base);
-    const auto attention_residual = cppinf::ops::add(hidden_states, attention_output.view());
-    const auto mlp_input =
-        cppinf::ops::rms_norm(attention_residual.view(), weights.post_attention_layernorm_weight, norm_epsilon);
+    const auto attention_residual = ops::add(hidden_states, attention_output.view());
+    const auto mlp_input = ops::rms_norm(attention_residual.view(), weights.post_attention_layernorm_weight,
+                                         norm_epsilon);
     const auto mlp_output = qwen_mlp(mlp_input.view(), weights.mlp);
-    return rename_tensor("qwen_decoder_block_result", cppinf::ops::add(attention_residual.view(), mlp_output.view()));
+    return rename_tensor("qwen_decoder_block_result", ops::add(attention_residual.view(), mlp_output.view()));
 }
 
 } // namespace cppinf::nn

@@ -13,6 +13,7 @@
 #include "tensors/tensor.h"
 
 using cppinf::nn::apply_rope;
+using cppinf::tensors::bfloat16_bits_to_float;
 using cppinf::tensors::DType;
 using cppinf::tensors::float_to_bfloat16_bits;
 using cppinf::tensors::Shape;
@@ -78,7 +79,7 @@ class RopeTest : public ::testing::Test {
             for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
                 std::uint16_t bits = 0;
                 std::memcpy(&bits, tensor_view.data().data() + index * sizeof(std::uint16_t), sizeof(std::uint16_t));
-                values.push_back(cppinf::tensors::bfloat16_bits_to_float(bits));
+                values.push_back(bfloat16_bits_to_float(bits));
             }
             return values;
         }

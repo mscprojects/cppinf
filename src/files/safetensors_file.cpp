@@ -49,7 +49,7 @@ std::int64_t read_i64(const json& value, std::string_view field_name) {
     return value.get<std::int64_t>();
 }
 
-cppinf::tensors::Shape parse_shape(const json& value) {
+tensors::Shape parse_shape(const json& value) {
     if (!value.is_array()) {
         throw std::invalid_argument("shape must be an array.");
     }
@@ -60,7 +60,7 @@ cppinf::tensors::Shape parse_shape(const json& value) {
         dims.push_back(read_i64(dim, "shape dimension"));
     }
 
-    return cppinf::tensors::Shape(std::move(dims));
+    return tensors::Shape(std::move(dims));
 }
 
 std::pair<std::size_t, std::size_t> parse_data_offsets(const json& value) {
@@ -134,7 +134,7 @@ ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
         }
 
         const auto& tensor_json = iterator.value();
-        const auto dtype = cppinf::tensors::parse_dtype(tensor_json.at("dtype").get<std::string>());
+        const auto dtype = tensors::parse_dtype(tensor_json.at("dtype").get<std::string>());
         const auto shape = parse_shape(tensor_json.at("shape"));
         const auto [begin, end] = parse_data_offsets(tensor_json.at("data_offsets"));
 

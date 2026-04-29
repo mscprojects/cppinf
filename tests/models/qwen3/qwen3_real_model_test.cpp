@@ -23,7 +23,10 @@ using cppinf::files::SafetensorsFile;
 using cppinf::models::qwen3::Qwen3Model;
 using cppinf::tensors::bfloat16_bits_to_float;
 using cppinf::tensors::DType;
+using cppinf::tensors::element_size_bytes;
+using cppinf::tensors::Shape;
 using cppinf::tensors::Tensor;
+using cppinf::tensors::TensorInfo;
 using cppinf::tensors::TensorView;
 
 class Qwen3RealModelTest : public ::testing::Test {
@@ -79,13 +82,13 @@ class Qwen3RealModelTest : public ::testing::Test {
             throw std::invalid_argument("read_last_token_values requires non-empty tensor dimensions.");
         }
 
-        const auto row_byte_size = vocabulary_size * cppinf::tensors::element_size_bytes(tensor.tensor_info().dtype);
+        const auto row_byte_size = vocabulary_size * element_size_bytes(tensor.tensor_info().dtype);
         const auto row_offset = (sequence_length - 1) * row_byte_size;
         return read_float_values(TensorView(
-            cppinf::tensors::TensorInfo{
+            TensorInfo{
                 .name = "last_token_logits",
                 .dtype = tensor.tensor_info().dtype,
-                .shape = cppinf::tensors::Shape({static_cast<std::int64_t>(vocabulary_size)}),
+                .shape = Shape({static_cast<std::int64_t>(vocabulary_size)}),
                 .byte_offset = 0,
             },
             std::span<const std::byte>(tensor.bytes()).subspan(row_offset, row_byte_size)));

@@ -48,8 +48,8 @@ tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tens
 }
 
 tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight) {
-    const auto transposed_weight = cppinf::ops::transpose_2d(weight);
-    return cppinf::ops::matmul(input, transposed_weight.view());
+    const auto transposed_weight = ops::transpose_2d(weight);
+    return ops::matmul(input, transposed_weight.view());
 }
 
 void validate_projection_weight(const tensors::TensorView& weight, std::string_view name, std::size_t output_size,
@@ -66,7 +66,7 @@ void validate_projection_weight(const tensors::TensorView& weight, std::string_v
 }
 
 void validate_qwen_mlp_inputs(const tensors::TensorView& hidden_states, const QwenMlpWeights& weights) {
-    cppinf::ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_mlp");
+    ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_mlp");
     const auto dtype = hidden_states.tensor_info().dtype;
     if (dtype != weights.gate_proj_weight.tensor_info().dtype || dtype != weights.up_proj_weight.tensor_info().dtype ||
         dtype != weights.down_proj_weight.tensor_info().dtype) {
@@ -95,8 +95,8 @@ tensors::Tensor qwen_mlp(const tensors::TensorView& hidden_states, const QwenMlp
     // Projection ops preserve the public dtype and hide any required promotion internally.
     const auto gate_projection = linear_project(hidden_states, weights.gate_proj_weight);
     const auto up_projection = linear_project(hidden_states, weights.up_proj_weight);
-    const auto activated_gate = cppinf::ops::silu(gate_projection.view());
-    const auto gated_projection = cppinf::ops::mul(activated_gate.view(), up_projection.view());
+    const auto activated_gate = ops::silu(gate_projection.view());
+    const auto gated_projection = ops::mul(activated_gate.view(), up_projection.view());
     return rename_tensor("qwen_mlp_result", linear_project(gated_projection.view(), weights.down_proj_weight));
 }
 
