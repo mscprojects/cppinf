@@ -20,9 +20,8 @@ class HfTokenizerTest : public ::testing::Test {
     }
 
     void write_tiny_tokenizer_files() {
-        write_text_file(
-            "tokenizer.json",
-            R"({
+        write_text_file("tokenizer.json",
+                        R"({
                 "version": "1.0",
                 "normalizer": {"type": "NFC"},
                 "pre_tokenizer": {
@@ -115,9 +114,8 @@ class HfTokenizerTest : public ::testing::Test {
                 }
             })");
 
-        write_text_file(
-            "tokenizer_config.json",
-            R"({
+        write_text_file("tokenizer_config.json",
+                        R"({
                 "tokenizer_class": "Qwen2Tokenizer",
                 "eos_token": "<|endoftext|>",
                 "pad_token": "<|endoftext|>",
@@ -189,8 +187,8 @@ TEST_F(HfTokenizerTest, GivenRealQwenTokenizer_WhenEncodingAndDecoding_ThenExpec
     EXPECT_EQ(std::string("Hello world"), tokenizer.decode(std::vector<std::int64_t>{9707, 1879}));
     EXPECT_EQ(std::string("Hello  world\n"), tokenizer.decode(std::vector<std::int64_t>{9707, 220, 1879, 198}));
     EXPECT_EQ(std::string("The quick brown fox jumps over 13 lazy dogs."),
-              tokenizer.decode(std::vector<std::int64_t>{785, 3974, 13876, 38835, 34208, 916, 220, 16, 18, 15678,
-                                                         12590, 13}));
+              tokenizer.decode(
+                  std::vector<std::int64_t>{785, 3974, 13876, 38835, 34208, 916, 220, 16, 18, 15678, 12590, 13}));
     EXPECT_EQ(std::string("<|im_start|>user\nHello<|im_end|>\n"),
               tokenizer.decode(std::vector<std::int64_t>{151644, 872, 198, 9707, 151645, 198}));
     EXPECT_EQ(std::int64_t{151645}, tokenizer.eos_token_id().value());

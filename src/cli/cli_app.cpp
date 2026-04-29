@@ -94,7 +94,8 @@ std::int64_t select_argmax_token_id(const tensors::Tensor& logits) {
     return best_token_id;
 }
 
-void stream_generated_text(const OutputWriter& output_writer, std::string_view previous_text, std::string_view current_text) {
+void stream_generated_text(const OutputWriter& output_writer, std::string_view previous_text,
+                           std::string_view current_text) {
     if (!output_writer || current_text.size() <= previous_text.size()) {
         return;
     }
@@ -175,9 +176,8 @@ CliResult run_with_output_writer(std::span<const std::string_view> args, const O
     auto* run_hf_subcommand = run_subcommand->add_subcommand("hf", "Run greedy generation from a Hugging Face model.");
     run_hf_subcommand->add_option("model_dir", run_hf_options.model_dir)->required();
     run_hf_subcommand->add_option("--prompt", run_hf_options.prompt, "Prompt text.")->required();
-    auto* max_new_tokens_option =
-        run_hf_subcommand->add_option("--max-new-tokens", run_hf_options.max_new_tokens,
-                                      "Generate up to N new tokens.");
+    auto* max_new_tokens_option = run_hf_subcommand->add_option("--max-new-tokens", run_hf_options.max_new_tokens,
+                                                                "Generate up to N new tokens.");
     max_new_tokens_option->check(CLI::PositiveNumber);
 
     auto owned_args = detail::to_owned_args(args);

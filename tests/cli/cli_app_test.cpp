@@ -99,9 +99,8 @@ class CliAppTest : public ::testing::Test {
     }
 
     void write_generation_tokenizer_files() {
-        write_text_file(
-            "tokenizer.json",
-            R"({
+        write_text_file("tokenizer.json",
+                        R"({
                 "version": "1.0",
                 "normalizer": {"type": "NFC"},
                 "pre_tokenizer": {
@@ -160,9 +159,8 @@ class CliAppTest : public ::testing::Test {
                 }
             })");
 
-        write_text_file(
-            "tokenizer_config.json",
-            R"({
+        write_text_file("tokenizer_config.json",
+                        R"({
                 "tokenizer_class": "Qwen2Tokenizer",
                 "eos_token": "<|endoftext|>",
                 "pad_token": "<|endoftext|>",
@@ -176,7 +174,8 @@ class CliAppTest : public ::testing::Test {
         auto header = ordered_json::object();
         std::vector<std::byte> tensor_data;
 
-        append_f32_tensor(header, tensor_data, "model.embed_tokens.weight", {3, 2}, {1.0f, 0.0f, 2.0f, 1.0f, 1.5f, 5.0f});
+        append_f32_tensor(header, tensor_data, "model.embed_tokens.weight", {3, 2},
+                          {1.0f, 0.0f, 2.0f, 1.0f, 1.5f, 5.0f});
         append_f32_tensor(header, tensor_data, "model.layers.0.input_layernorm.weight", {2}, {1.0f, 1.0f});
         append_f32_tensor(header, tensor_data, "model.layers.0.post_attention_layernorm.weight", {2}, {1.0f, 1.0f});
         append_f32_tensor(header, tensor_data, "model.layers.0.self_attn.q_proj.weight", {2, 2},
@@ -189,12 +188,9 @@ class CliAppTest : public ::testing::Test {
                           {0.0f, 0.0f, 0.0f, 0.0f});
         append_f32_tensor(header, tensor_data, "model.layers.0.self_attn.o_proj.weight", {2, 2},
                           {0.0f, 0.0f, 0.0f, 0.0f});
-        append_f32_tensor(header, tensor_data, "model.layers.0.mlp.gate_proj.weight", {2, 2},
-                          {0.0f, 0.0f, 0.0f, 0.0f});
-        append_f32_tensor(header, tensor_data, "model.layers.0.mlp.up_proj.weight", {2, 2},
-                          {0.0f, 0.0f, 0.0f, 0.0f});
-        append_f32_tensor(header, tensor_data, "model.layers.0.mlp.down_proj.weight", {2, 2},
-                          {0.0f, 0.0f, 0.0f, 0.0f});
+        append_f32_tensor(header, tensor_data, "model.layers.0.mlp.gate_proj.weight", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
+        append_f32_tensor(header, tensor_data, "model.layers.0.mlp.up_proj.weight", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
+        append_f32_tensor(header, tensor_data, "model.layers.0.mlp.down_proj.weight", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
         append_f32_tensor(header, tensor_data, "model.norm.weight", {2}, {1.0f, 1.0f});
 
         write_binary_file("model.safetensors", make_safetensors_file_bytes(header.dump(), tensor_data));
