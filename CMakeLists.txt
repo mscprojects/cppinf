@@ -133,6 +133,7 @@ if(BUILD_TESTING)
          tests/loaders/hf/hf_model_files_test.cpp
          tests/loaders/hf/hf_model_summary_test.cpp
          tests/models/qwen3/qwen3_model_test.cpp
+         tests/models/qwen3/qwen3_real_model_test.cpp
          tests/nn/causal_self_attention_test.cpp
          tests/nn/qwen_decoder_block_test.cpp
          tests/nn/qwen_attention_test.cpp
