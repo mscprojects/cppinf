@@ -9,14 +9,17 @@
 #include <gtest/gtest.h>
 
 #include "nn/causal_self_attention.h"
+#include "ops/tensor_ops.h"
 #include "test_tensor_utils.h"
 
 namespace cppinf::tests {
 
 using nn::causal_self_attention;
+using ops::narrow;
 using tensor_test_utils::expect_float_values_near;
 using tensor_test_utils::make_bf16_tensor;
 using tensor_test_utils::make_f32_tensor;
+using tensor_test_utils::read_float_values;
 using tensors::DType;
 using tensors::Shape;
 
@@ -74,6 +77,32 @@ TEST_F(CausalSelfAttentionTest,
         result.view(),
         {-0.2109375f, 0.53515625f, -0.0161132812f, 0.1000976562f, -0.451171875f, 1.296875f, 0.87109375f, 0.123046875f},
         1e-6f);
+}
+
+TEST_F(CausalSelfAttentionTest,
+       GivenMultipleHeads_WhenApplyingCausalSelfAttention_ThenEachHeadMatchesIndependentResult) {
+    const auto query = make_f32_tensor("query", {2, 2, 2}, {0.5f, -1.0f, 1.25f, 0.75f, -0.5f, 2.0f, 1.5f, 0.5f});
+    const auto key = make_f32_tensor("key", {2, 3, 2},
+                                     {1.0f, 0.0f, 0.5f, -1.5f, -0.75f, 1.25f, 0.25f, 1.5f, -1.25f, 0.5f, 1.0f, -0.5f});
+    const auto value = make_f32_tensor(
+        "value", {2, 3, 2}, {2.0f, -1.0f, 0.5f, 1.5f, -1.25f, 0.75f, -0.5f, 2.0f, 1.75f, -1.25f, 0.25f, 0.5f});
+
+    const auto result = causal_self_attention(query.view(), key.view(), value.view(), 1);
+
+    std::vector<float> expected_values;
+    for (std::size_t head_index = 0; head_index < 2; ++head_index) {
+        const auto expected_head =
+            causal_self_attention(narrow(query.view(), 0, head_index, 1), narrow(key.view(), 0, head_index, 1),
+                                  narrow(value.view(), 0, head_index, 1), 1);
+        const auto head_values = read_float_values(expected_head.view());
+        expected_values.insert(expected_values.end(), head_values.begin(), head_values.end());
+    }
+
+    const auto actual_values = read_float_values(result.view());
+    ASSERT_EQ(expected_values.size(), actual_values.size());
+    for (std::size_t index = 0; index < expected_values.size(); ++index) {
+        EXPECT_NEAR(expected_values[index], actual_values[index], 1e-6f) << "index=" << index;
+    }
 }
 
 TEST_F(CausalSelfAttentionTest, GivenMismatchedPastLength_WhenApplyingCausalSelfAttention_ThenItThrows) {

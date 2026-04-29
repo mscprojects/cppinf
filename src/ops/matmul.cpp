@@ -14,13 +14,23 @@ void validate_matmul_inputs(const tensors::TensorView& lhs, const tensors::Tenso
         throw std::invalid_argument("matmul requires matching tensor dtypes.");
     }
     detail::validate_supported_float_dtype(lhs.tensor_info().dtype, "matmul");
-    if (lhs.tensor_info().shape.rank() != 2 || rhs.tensor_info().shape.rank() != 2) {
-        throw std::invalid_argument("matmul requires rank-2 tensors.");
+    if (lhs.tensor_info().shape.rank() != rhs.tensor_info().shape.rank()) {
+        throw std::invalid_argument("matmul requires tensors with matching rank.");
+    }
+
+    if (lhs.tensor_info().shape.rank() != 2 && lhs.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("matmul requires rank-2 or rank-3 tensors.");
     }
 
     const auto& lhs_dims = lhs.tensor_info().shape.dims();
     const auto& rhs_dims = rhs.tensor_info().shape.dims();
-    if (lhs_dims[1] != rhs_dims[0]) {
+    if (lhs.tensor_info().shape.rank() == 3 && lhs_dims[0] != rhs_dims[0]) {
+        throw std::invalid_argument("matmul requires matching batch dimensions.");
+    }
+
+    const auto lhs_inner = lhs_dims.back();
+    const auto rhs_inner = rhs_dims[rhs_dims.size() - 2];
+    if (lhs_inner != rhs_inner) {
         throw std::invalid_argument("matmul inner dimensions must match.");
     }
 }
@@ -40,8 +50,14 @@ tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView
 
     const auto& lhs_dims = lhs_compute.tensor_info().shape.dims();
     const auto& rhs_dims = rhs_compute.tensor_info().shape.dims();
-    auto result =
-        detail::make_result_tensor("matmul_result", compute_dtype, tensors::Shape({lhs_dims[0], rhs_dims[1]}));
+    std::vector<std::int64_t> result_dims;
+    if (lhs_compute.tensor_info().shape.rank() == 2) {
+        result_dims = {lhs_dims[0], rhs_dims[1]};
+    } else {
+        result_dims = {lhs_dims[0], lhs_dims[1], rhs_dims[2]};
+    }
+
+    auto result = detail::make_result_tensor("matmul_result", compute_dtype, tensors::Shape(std::move(result_dims)));
 
     const auto src_desc = detail::make_dense_desc(lhs_compute.tensor_info().shape, compute_dtype, "matmul");
     const auto weights_desc = detail::make_dense_desc(rhs_compute.tensor_info().shape, compute_dtype, "matmul");
