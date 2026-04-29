@@ -118,6 +118,8 @@ tensors::Tensor embedding_lookup(const tensors::TensorView& embedding_table, std
         "qwen3_hidden_states", embedding_table.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(token_ids.size()), static_cast<std::int64_t>(hidden_size)})));
 
+    // Each token id selects one row from the embedding table [vocab, hidden], and copying those rows materializes the
+    // prompt hidden states [seq, hidden].
     for (std::size_t token_index = 0; token_index < token_ids.size(); ++token_index) {
         const auto token_id = token_ids[token_index];
         if (token_id < 0 || static_cast<std::uint64_t>(token_id) >= vocab_size) {

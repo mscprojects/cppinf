@@ -73,6 +73,8 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
     std::optional<tensors::Tensor> input_storage;
     const auto input_f32 = ops::detail::maybe_cast_to_dtype(input, tensors::DType::F32, input_storage, "rope_result");
 
+    // Build one inverse frequency per feature pair so lower-index pairs rotate slowly and higher-index pairs rotate
+    // faster.
     std::vector<float> inverse_frequencies;
     inverse_frequencies.reserve(half_head_size);
     for (std::size_t pair_index = 0; pair_index < half_head_size; ++pair_index) {
@@ -80,7 +82,8 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
             std::pow(rope_base, -static_cast<float>(pair_index) / static_cast<float>(half_head_size)));
     }
 
-    // RoPE computes angles in f32, then returns to the caller's dtype at the helper boundary.
+    // RoPE computes angles in f32, rotates each paired feature channel by the token position angle, and returns to the
+    // caller's dtype at the helper boundary. The outer shape stays [heads, seq, head_dim].
     auto result_f32 = tensors::Tensor::zeros(
         tensors::make_result_tensor_info("rope_result", tensors::DType::F32, input.tensor_info().shape));
 
