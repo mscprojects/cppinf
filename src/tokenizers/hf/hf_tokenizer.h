@@ -44,7 +44,7 @@ class HfTokenizer {
     std::vector<std::string> pretokenize(std::string_view text) const;
     std::vector<std::string> bpe_encode(std::string_view piece) const;
     std::optional<std::pair<std::size_t, std::int64_t>> added_token_match(std::string_view text,
-                                                                           std::size_t offset) const;
+                                                                          std::size_t offset) const;
     std::string decode_byte_level(std::string_view encoded) const;
 
     std::unordered_map<std::string, std::int64_t> token_to_id_;

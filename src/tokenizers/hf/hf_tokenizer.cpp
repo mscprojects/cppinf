@@ -35,7 +35,8 @@ json parse_json_file(const std::filesystem::path& path) {
     try {
         return json::parse(read_text_file(path));
     } catch (const json::parse_error& error) {
-        throw std::invalid_argument(fmt::format("Failed to parse tokenizer JSON '{}': {}", path.string(), error.what()));
+        throw std::invalid_argument(
+            fmt::format("Failed to parse tokenizer JSON '{}': {}", path.string(), error.what()));
     }
 }
 
@@ -266,11 +267,13 @@ void validate_supported_tokenizer_json(const json& tokenizer_json) {
     }
     const auto& pretokenizers = pre_tokenizer.at("pretokenizers");
     if (!pretokenizers.is_array() || pretokenizers.size() != 2) {
-        throw std::invalid_argument("Only HF tokenizer.json files with split + bytelevel pre-tokenizers are supported.");
+        throw std::invalid_argument(
+            "Only HF tokenizer.json files with split + bytelevel pre-tokenizers are supported.");
     }
     if (read_string(pretokenizers[0].at("type"), "pre_tokenizer[0].type") != "Split" ||
         read_string(pretokenizers[1].at("type"), "pre_tokenizer[1].type") != "ByteLevel") {
-        throw std::invalid_argument("Only HF tokenizer.json files with split + bytelevel pre-tokenizers are supported.");
+        throw std::invalid_argument(
+            "Only HF tokenizer.json files with split + bytelevel pre-tokenizers are supported.");
     }
     if (read_string(pretokenizers[0].at("pattern").at("Regex"), "pre_tokenizer[0].pattern.Regex") !=
         k_qwen_split_pattern) {
@@ -346,13 +349,12 @@ std::vector<HfTokenizer::AddedToken> parse_added_tokens(const json& tokenizer_js
     }
     for (const auto& added_token_json : added_tokens_json) {
         const auto id = read_i64(added_token_json.at("id"), "added_tokens.id");
-        added_tokens_by_id.emplace(
-            id,
-            HfTokenizer::AddedToken{
-                .id = id,
-                .content = read_string(added_token_json.at("content"), "added_tokens.content"),
-                .special = added_token_json.value("special", false),
-            });
+        added_tokens_by_id.emplace(id,
+                                   HfTokenizer::AddedToken{
+                                       .id = id,
+                                       .content = read_string(added_token_json.at("content"), "added_tokens.content"),
+                                       .special = added_token_json.value("special", false),
+                                   });
     }
 
     const auto config_iterator = tokenizer_config.find("added_tokens_decoder");
@@ -366,12 +368,11 @@ std::vector<HfTokenizer::AddedToken> parse_added_tokens(const json& tokenizer_js
                 continue;
             }
             added_tokens_by_id.emplace(
-                id,
-                HfTokenizer::AddedToken{
-                    .id = id,
-                    .content = read_string(iterator.value().at("content"), "added_tokens_decoder.content"),
-                    .special = iterator.value().value("special", false),
-                });
+                id, HfTokenizer::AddedToken{
+                        .id = id,
+                        .content = read_string(iterator.value().at("content"), "added_tokens_decoder.content"),
+                        .special = iterator.value().value("special", false),
+                    });
         }
     }
 
@@ -402,21 +403,21 @@ HfTokenizer::HfTokenizer(std::unordered_map<std::string, std::int64_t> token_to_
                          std::vector<std::string> byte_encoder,
                          std::unordered_map<std::string, unsigned char> byte_decoder,
                          std::optional<std::int64_t> eos_token_id, std::optional<std::int64_t> pad_token_id)
-    : token_to_id_(std::move(token_to_id)), id_to_token_(std::move(id_to_token)), added_tokens_(std::move(added_tokens)),
-      merge_ranks_(std::move(merge_ranks)), byte_encoder_(std::move(byte_encoder)),
-      byte_decoder_(std::move(byte_decoder)), eos_token_id_(eos_token_id), pad_token_id_(pad_token_id) {
+    : token_to_id_(std::move(token_to_id)), id_to_token_(std::move(id_to_token)),
+      added_tokens_(std::move(added_tokens)), merge_ranks_(std::move(merge_ranks)),
+      byte_encoder_(std::move(byte_encoder)), byte_decoder_(std::move(byte_decoder)), eos_token_id_(eos_token_id),
+      pad_token_id_(pad_token_id) {
     added_tokens_by_length_.reserve(added_tokens_.size());
     for (const auto& added_token : added_tokens_) {
         added_tokens_by_length_.emplace_back(added_token.content, added_token.id);
         added_token_ids_.insert(added_token.id);
     }
-    std::sort(added_tokens_by_length_.begin(), added_tokens_by_length_.end(),
-              [](const auto& lhs, const auto& rhs) {
-                  if (lhs.first.size() == rhs.first.size()) {
-                      return lhs.first < rhs.first;
-                  }
-                  return lhs.first.size() > rhs.first.size();
-              });
+    std::sort(added_tokens_by_length_.begin(), added_tokens_by_length_.end(), [](const auto& lhs, const auto& rhs) {
+        if (lhs.first.size() == rhs.first.size()) {
+            return lhs.first < rhs.first;
+        }
+        return lhs.first.size() > rhs.first.size();
+    });
 }
 
 HfTokenizer HfTokenizer::from_dir(const std::filesystem::path& model_dir) {
@@ -454,7 +455,8 @@ HfTokenizer HfTokenizer::from_files(const std::filesystem::path& tokenizer_json_
 }
 
 std::vector<std::int64_t> HfTokenizer::encode(std::string_view text) const {
-    // The current Qwen tokenizer files require NFC normalization. For plain UTF-8 prompts we keep the input bytes as-is.
+    // The current Qwen tokenizer files require NFC normalization. For plain UTF-8 prompts we keep the input bytes
+    // as-is.
     const std::string normalized_text(text);
 
     std::vector<std::int64_t> token_ids;
@@ -537,7 +539,8 @@ std::vector<std::int64_t> HfTokenizer::encode_non_added_segment(std::string_view
         for (const auto& bpe_token : bpe_encode(byte_level_piece)) {
             const auto iterator = token_to_id_.find(bpe_token);
             if (iterator == token_to_id_.end()) {
-                throw std::invalid_argument(fmt::format("Tokenizer piece '{}' is missing from the vocabulary.", bpe_token));
+                throw std::invalid_argument(
+                    fmt::format("Tokenizer piece '{}' is missing from the vocabulary.", bpe_token));
             }
             token_ids.push_back(iterator->second);
         }
@@ -557,8 +560,7 @@ std::vector<std::string> HfTokenizer::pretokenize(std::string_view text) const {
         }
 
         auto newline_scan = offset;
-        while (newline_scan < text.size() &&
-               is_space_not_newline(static_cast<unsigned char>(text[newline_scan]))) {
+        while (newline_scan < text.size() && is_space_not_newline(static_cast<unsigned char>(text[newline_scan]))) {
             ++newline_scan;
         }
         if (newline_scan < text.size() && is_newline(static_cast<unsigned char>(text[newline_scan]))) {
@@ -686,7 +688,7 @@ std::vector<std::string> HfTokenizer::bpe_encode(std::string_view piece) const {
 }
 
 std::optional<std::pair<std::size_t, std::int64_t>> HfTokenizer::added_token_match(std::string_view text,
-                                                                                    std::size_t offset) const {
+                                                                                   std::size_t offset) const {
     for (const auto& [content, token_id] : added_tokens_by_length_) {
         if (offset + content.size() > text.size()) {
             continue;
