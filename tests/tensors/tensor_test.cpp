@@ -73,7 +73,7 @@ TEST_F(TensorTest, GivenShape_WhenQueryingRankAndElements_ThenCountsAreReturned)
 }
 
 TEST_F(TensorTest, GivenNegativeDimension_WhenConstructingShape_ThenItThrows) {
-    EXPECT_THROW(static_cast<void>(Shape({1, -1})), std::invalid_argument);
+    EXPECT_THROW(Shape({1, -1}), std::invalid_argument);
 }
 
 TEST_F(TensorTest, GivenTensorInfo_WhenFormattingMetadata_ThenStringMatches) {
@@ -107,14 +107,14 @@ TEST_F(TensorTest, GivenOwnedTensor_WhenQueryingView_ThenTensorViewMatchesStorag
 TEST_F(TensorTest, GivenNonZeroOffset_WhenCreatingTensor_ThenItThrows) {
     const std::array<std::byte, 4 * sizeof(float)> bytes{};
 
-    EXPECT_THROW(static_cast<void>(Tensor(
+    EXPECT_THROW(Tensor(
                      TensorInfo{
                          .name = "activation",
                          .dtype = DType::F32,
                          .shape = Shape({2, 2}),
                          .byte_offset = 16,
                      },
-                     std::vector<std::byte>(bytes.begin(), bytes.end()))),
+                     std::vector<std::byte>(bytes.begin(), bytes.end())),
                  std::invalid_argument);
 }
 
@@ -122,7 +122,7 @@ TEST_F(TensorTest, GivenMismatchedBytes_WhenCreatingTensorView_ThenItThrows) {
     const TensorInfo tensor_info = make_tensor_info();
     const std::array<std::byte, 8> wrong_bytes{};
 
-    EXPECT_THROW(static_cast<void>(TensorView(tensor_info, wrong_bytes)), std::invalid_argument);
+    EXPECT_THROW(TensorView(tensor_info, wrong_bytes), std::invalid_argument);
 }
 
 } // namespace cppinf::tests

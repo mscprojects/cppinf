@@ -91,7 +91,7 @@ TEST_F(OpsTest, GivenTensorView_WhenReshaping_ThenMetadataChangesOnly) {
 TEST_F(OpsTest, GivenIncompatibleShape_WhenReshaping_ThenItThrows) {
     const auto input = make_f32_tensor("input", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
 
-    EXPECT_THROW(static_cast<void>(reshape(input.view(), Shape({3}))), std::invalid_argument);
+    EXPECT_THROW(reshape(input.view(), Shape({3})), std::invalid_argument);
 }
 
 TEST_F(OpsTest, GivenRank2Tensor_WhenTransposing_ThenExpectedResultIsReturned) {
@@ -116,7 +116,7 @@ TEST_F(OpsTest, GivenTensorView_WhenNarrowingFirstDimension_ThenSubspanIsReturne
 TEST_F(OpsTest, GivenNonZeroDimension_WhenNarrowing_ThenItThrows) {
     const auto input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
-    EXPECT_THROW(static_cast<void>(narrow(input.view(), 1, 0, 1)), std::invalid_argument);
+    EXPECT_THROW(narrow(input.view(), 1, 0, 1), std::invalid_argument);
 }
 
 TEST_F(OpsTest, GivenMatchingBf16Tensors_WhenAdding_ThenElementwiseSumIsReturned) {
@@ -230,7 +230,7 @@ TEST_F(OpsTest, GivenUnsupportedTensorType_WhenAdding_ThenItThrows) {
         },
         std::vector<std::byte>{std::byte{0x05}, std::byte{0x06}, std::byte{0x07}, std::byte{0x08}});
 
-    EXPECT_THROW(static_cast<void>(add(lhs.view(), rhs.view())), std::invalid_argument);
+    EXPECT_THROW(add(lhs.view(), rhs.view()), std::invalid_argument);
 }
 
 } // namespace cppinf::tests

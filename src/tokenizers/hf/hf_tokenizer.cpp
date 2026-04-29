@@ -148,7 +148,7 @@ std::vector<std::string> split_utf8_codepoints(std::string_view text) {
     std::vector<std::string> codepoints;
     for (std::size_t offset = 0; offset < text.size();) {
         std::size_t length = 0;
-        static_cast<void>(codepoint_from_utf8(text, offset, &length));
+        codepoint_from_utf8(text, offset, &length);
         codepoints.emplace_back(text.substr(offset, length));
         offset += length;
     }
@@ -638,7 +638,7 @@ std::vector<std::string> HfTokenizer::pretokenize(std::string_view text) const {
         }
 
         std::size_t codepoint_length = 0;
-        static_cast<void>(codepoint_from_utf8(text, offset, &codepoint_length));
+        codepoint_from_utf8(text, offset, &codepoint_length);
         pieces.emplace_back(text.substr(offset, codepoint_length));
         offset += codepoint_length;
     }

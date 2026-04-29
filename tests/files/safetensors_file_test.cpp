@@ -83,7 +83,7 @@ TEST_F(SafetensorsFileTest, GivenUnknownTensor_WhenQueryingTensorInfo_ThenItThro
 
     const auto file = SafetensorsFile::from_bytes(file_test_utils::make_safetensors_file_bytes(header, tensor_data));
 
-    EXPECT_THROW(static_cast<void>(file.tensor_info("missing")), std::out_of_range);
+    EXPECT_THROW(file.tensor_info("missing"), std::out_of_range);
 }
 
 TEST_F(SafetensorsFileTest, GivenFilePath_WhenLoading_ThenFileBytesAreParsed) {
@@ -109,8 +109,7 @@ TEST_F(SafetensorsFileTest, GivenInvalidTensorRange_WhenLoading_ThenItThrows) {
     };
     const std::string header = R"({"weights":{"dtype":"U8","shape":[4],"data_offsets":[0,4]}})";
 
-    EXPECT_THROW(static_cast<void>(
-                     SafetensorsFile::from_bytes(file_test_utils::make_safetensors_file_bytes(header, tensor_data))),
+    EXPECT_THROW(SafetensorsFile::from_bytes(file_test_utils::make_safetensors_file_bytes(header, tensor_data)),
                  std::invalid_argument);
 }
 

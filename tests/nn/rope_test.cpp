@@ -52,7 +52,7 @@ TEST_F(RopeTest, GivenTorchOracleBf16Inputs_WhenApplyingRope_ThenExpectedValuesA
 TEST_F(RopeTest, GivenOddHeadSize_WhenApplyingRope_ThenItThrows) {
     const auto input = make_f32_tensor("input", {1, 2, 3}, {1.0f, -0.5f, 0.25f, 0.75f, -1.0f, 0.5f});
 
-    EXPECT_THROW(static_cast<void>(apply_rope(input.view())), std::invalid_argument);
+    EXPECT_THROW(apply_rope(input.view()), std::invalid_argument);
 }
 
 } // namespace cppinf::tests

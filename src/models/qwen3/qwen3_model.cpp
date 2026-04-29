@@ -60,20 +60,20 @@ void validate_model_config(const loaders::hf::HfConfig& config) {
 }
 
 void validate_required_tensors(const loaders::hf::HfConfig& config, const files::SafetensorsFile& weights) {
-    static_cast<void>(weights.tensor_info("model.embed_tokens.weight"));
-    static_cast<void>(weights.tensor_info("model.norm.weight"));
+    weights.tensor_info("model.embed_tokens.weight");
+    weights.tensor_info("model.norm.weight");
     for (std::size_t layer_index = 0; layer_index < config.num_hidden_layers; ++layer_index) {
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "input_layernorm.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "post_attention_layernorm.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "self_attn.q_proj.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "self_attn.q_norm.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "self_attn.k_proj.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "self_attn.k_norm.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "self_attn.v_proj.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "self_attn.o_proj.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "mlp.gate_proj.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "mlp.up_proj.weight")));
-        static_cast<void>(weights.tensor_info(layer_tensor_name(layer_index, "mlp.down_proj.weight")));
+        weights.tensor_info(layer_tensor_name(layer_index, "input_layernorm.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "post_attention_layernorm.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "self_attn.q_proj.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "self_attn.q_norm.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "self_attn.k_proj.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "self_attn.k_norm.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "self_attn.v_proj.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "self_attn.o_proj.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "mlp.gate_proj.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "mlp.up_proj.weight"));
+        weights.tensor_info(layer_tensor_name(layer_index, "mlp.down_proj.weight"));
     }
 }
 

@@ -358,7 +358,7 @@ TEST_F(Qwen3ModelTest, GivenTinyBf16Checkpoint_WhenRunningForward_ThenExpectedLo
 TEST_F(Qwen3ModelTest, GivenUntiedEmbeddings_WhenLoadingModel_ThenItThrows) {
     write_tiny_model_dir(false);
 
-    EXPECT_THROW(static_cast<void>(Qwen3Model::from_dir(model_dir())), std::invalid_argument);
+    EXPECT_THROW(Qwen3Model::from_dir(model_dir()), std::invalid_argument);
 }
 
 } // namespace cppinf::tests

@@ -104,7 +104,7 @@ TEST_F(HfModelFilesTest, GivenOptionalFilesMissing_WhenResolving_ThenOptionalsAr
 TEST_F(HfModelFilesTest, GivenMissingRequiredFile_WhenResolving_ThenItThrows) {
     write_text_file("config.json", "{}");
 
-    EXPECT_THROW(static_cast<void>(HfModelFiles::from_dir(model_dir())), std::invalid_argument);
+    EXPECT_THROW(HfModelFiles::from_dir(model_dir()), std::invalid_argument);
 }
 
 TEST_F(HfModelFilesTest, GivenValidDirectory_WhenLoadingConfigAndWeights_ThenTheyAreAvailable) {
@@ -140,7 +140,7 @@ TEST_F(HfModelFilesTest, GivenShardedIndex_WhenResolving_ThenItThrows) {
     write_required_hf_files();
     write_text_file("model.safetensors.index.json", R"({"metadata":{}})");
 
-    EXPECT_THROW(static_cast<void>(HfModelFiles::from_dir(model_dir())), std::invalid_argument);
+    EXPECT_THROW(HfModelFiles::from_dir(model_dir()), std::invalid_argument);
 }
 
 } // namespace cppinf::tests

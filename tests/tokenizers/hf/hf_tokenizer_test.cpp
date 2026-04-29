@@ -164,7 +164,7 @@ TEST_F(HfTokenizerTest, GivenUnknownTokenId_WhenDecoding_ThenItThrows) {
 
     const auto tokenizer = HfTokenizer::from_files(temp_dir() / "tokenizer.json", temp_dir() / "tokenizer_config.json");
 
-    EXPECT_THROW(static_cast<void>(tokenizer.decode(std::vector<std::int64_t>{999})), std::out_of_range);
+    EXPECT_THROW(tokenizer.decode(std::vector<std::int64_t>{999}), std::out_of_range);
 }
 
 TEST_F(HfTokenizerTest, GivenRealQwenTokenizer_WhenEncodingAndDecoding_ThenExpectedOracleValuesAreReturned) {

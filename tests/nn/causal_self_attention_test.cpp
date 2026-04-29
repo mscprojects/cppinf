@@ -81,8 +81,7 @@ TEST_F(CausalSelfAttentionTest, GivenMismatchedPastLength_WhenApplyingCausalSelf
     const auto key = make_f32_tensor("key", {1, 2, 2}, {0.25f, 1.0f, -1.25f, 0.5f});
     const auto value = make_f32_tensor("value", {1, 2, 2}, {1.5f, -0.25f, 0.5f, 0.75f});
 
-    EXPECT_THROW(static_cast<void>(causal_self_attention(query.view(), key.view(), value.view(), 1)),
-                 std::invalid_argument);
+    EXPECT_THROW(causal_self_attention(query.view(), key.view(), value.view(), 1), std::invalid_argument);
 }
 
 } // namespace cppinf::tests
