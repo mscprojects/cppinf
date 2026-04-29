@@ -111,6 +111,8 @@ set(CPPINF_SOURCES
     src/tensors/tensor.h
     src/tensors/tensor_info.cpp
     src/tensors/tensor_info.h
+    src/tokenizers/hf/hf_tokenizer.cpp
+    src/tokenizers/hf/hf_tokenizer.h
     src/tensors/tensor_view.cpp
     src/tensors/tensor_view.h
 )
@@ -134,14 +136,15 @@ if(BUILD_TESTING)
          tests/loaders/hf/hf_model_summary_test.cpp
          tests/models/qwen3/qwen3_model_test.cpp
          tests/models/qwen3/qwen3_real_model_test.cpp
-         tests/nn/causal_self_attention_test.cpp
-         tests/nn/qwen_decoder_block_test.cpp
-         tests/nn/qwen_attention_test.cpp
-         tests/nn/qwen_mlp_test.cpp
-         tests/nn/rope_test.cpp
-         tests/ops/ops_test.cpp
-         tests/tensors/tensor_test.cpp
-     )
+        tests/nn/causal_self_attention_test.cpp
+        tests/nn/qwen_decoder_block_test.cpp
+        tests/nn/qwen_attention_test.cpp
+        tests/nn/qwen_mlp_test.cpp
+        tests/nn/rope_test.cpp
+        tests/tokenizers/hf/hf_tokenizer_test.cpp
+        tests/ops/ops_test.cpp
+        tests/tensors/tensor_test.cpp
+    )
     target_include_directories(cppinf_tests PRIVATE
         ${PROJECT_SOURCE_DIR}/src
         ${PROJECT_SOURCE_DIR}/tests
