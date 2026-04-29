@@ -133,7 +133,7 @@ std::string run_hf_generation(const RunHfOptions& options, const OutputWriter& o
         }
         token_ids.push_back(next_token_id);
 
-        const auto next_decoded_text = tokenizer.decode(token_ids);
+        auto next_decoded_text = tokenizer.decode(token_ids);
         stream_generated_text(output_writer, decoded_text, next_decoded_text);
         decoded_text = std::move(next_decoded_text);
     }

@@ -18,7 +18,9 @@ HfModelSummary load_model_summary(const std::filesystem::path& model_dir, std::s
 
     const auto& tensors = weights.tensors();
     const auto preview_size = std::min(tensor_preview_limit, tensors.size());
-    std::vector<tensors::TensorInfo> tensor_preview(tensors.begin(), tensors.begin() + preview_size);
+    auto preview_end = tensors.begin();
+    std::advance(preview_end, static_cast<std::ptrdiff_t>(preview_size));
+    std::vector<tensors::TensorInfo> tensor_preview(tensors.begin(), preview_end);
 
     return HfModelSummary{
         .model_dir = model_dir,

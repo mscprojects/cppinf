@@ -155,8 +155,8 @@ TEST_F(HfTokenizerTest, GivenTinyFixture_WhenEncodingAndDecoding_ThenExpectedIds
     EXPECT_EQ(std::string("Hello  world\n"), tokenizer.decode(std::vector<std::int64_t>{0, 3, 2, 4}));
     EXPECT_EQ(std::string("<|im_start|>user\nHello<|im_end|>\n"),
               tokenizer.decode(std::vector<std::int64_t>{100, 1, 4, 0, 101, 4}));
-    EXPECT_EQ(std::int64_t{102}, tokenizer.eos_token_id().value());
-    EXPECT_EQ(std::int64_t{102}, tokenizer.pad_token_id().value());
+    EXPECT_EQ(std::optional<std::int64_t>{102}, tokenizer.eos_token_id());
+    EXPECT_EQ(std::optional<std::int64_t>{102}, tokenizer.pad_token_id());
 }
 
 TEST_F(HfTokenizerTest, GivenUnknownTokenId_WhenDecoding_ThenItThrows) {
@@ -193,8 +193,8 @@ TEST_F(HfTokenizerTest, GivenRealQwenTokenizer_WhenEncodingAndDecoding_ThenExpec
                   std::vector<std::int64_t>{785, 3974, 13876, 38835, 34208, 916, 220, 16, 18, 15678, 12590, 13}));
     EXPECT_EQ(std::string("<|im_start|>user\nHello<|im_end|>\n"),
               tokenizer.decode(std::vector<std::int64_t>{151644, 872, 198, 9707, 151645, 198}));
-    EXPECT_EQ(std::int64_t{151645}, tokenizer.eos_token_id().value());
-    EXPECT_EQ(std::int64_t{151643}, tokenizer.pad_token_id().value());
+    EXPECT_EQ(std::optional<std::int64_t>{151645}, tokenizer.eos_token_id());
+    EXPECT_EQ(std::optional<std::int64_t>{151643}, tokenizer.pad_token_id());
 }
 
 } // namespace cppinf::tests

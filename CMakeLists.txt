@@ -11,6 +11,43 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(CPPINF_WARNINGS_AS_ERRORS "Treat compiler warnings as errors." ON)
+option(CPPINF_ENABLE_CLANG_TIDY "Run clang-tidy for cppinf targets." ON)
+
+function(cppinf_enable_warnings target_name)
+    target_compile_options(
+        ${target_name}
+        PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wconversion
+            -Wsign-conversion
+            -Wshadow
+            -Wundef
+            -Wold-style-cast
+            -Wnon-virtual-dtor
+            -Woverloaded-virtual
+    )
+
+    if(CPPINF_WARNINGS_AS_ERRORS)
+        target_compile_options(${target_name} PRIVATE -Werror)
+    endif()
+endfunction()
+
+function(cppinf_enable_clang_tidy target_name)
+    if(NOT CPPINF_ENABLE_CLANG_TIDY)
+        return()
+    endif()
+
+    find_program(CPPINF_CLANG_TIDY_EXECUTABLE NAMES clang-tidy REQUIRED)
+    set_target_properties(
+        ${target_name}
+        PROPERTIES
+            CXX_CLANG_TIDY "${CPPINF_CLANG_TIDY_EXECUTABLE};--quiet;--warnings-as-errors=*"
+    )
+endfunction()
+
 set(FMT_DOC OFF CACHE BOOL "" FORCE)
 set(FMT_TEST OFF CACHE BOOL "" FORCE)
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
@@ -65,8 +102,14 @@ FetchContent_Declare(
   GIT_TAG v1.15.3
 )
 
-FetchContent_MakeAvailable(CLI11 fmt googletest nlohmann_json oneDNN spdlog)
+FetchContent_MakeAvailable(CLI11 fmt googletest nlohmann_json spdlog)
+
+FetchContent_MakeAvailable(oneDNN)
 find_package(OpenMP REQUIRED)
+
+if(TARGET dnnl)
+    set_property(TARGET dnnl PROPERTY SYSTEM TRUE)
+endif()
 
 set(CPPINF_SOURCES
     src/io/file.cpp
@@ -77,24 +120,24 @@ set(CPPINF_SOURCES
     src/files/safetensors_file.h
     src/loaders/hf/hf_config.cpp
     src/loaders/hf/hf_config.h
-     src/loaders/hf/hf_model_files.cpp
-     src/loaders/hf/hf_model_files.h
-     src/loaders/hf/hf_model_summary.cpp
-     src/loaders/hf/hf_model_summary.h
-     src/models/qwen3/qwen3_model.cpp
-     src/models/qwen3/qwen3_model.h
-     src/nn/causal_self_attention.cpp
-     src/nn/causal_self_attention.h
-     src/nn/qwen_decoder_block.cpp
-     src/nn/qwen_decoder_block.h
-     src/nn/qwen_attention.cpp
-     src/nn/qwen_attention.h
-     src/nn/qwen_mlp.cpp
-     src/nn/qwen_mlp.h
-     src/nn/rope.cpp
-     src/nn/rope.h
-     src/ops/elementwise_ops.cpp
-     src/ops/elementwise_ops.h
+    src/loaders/hf/hf_model_files.cpp
+    src/loaders/hf/hf_model_files.h
+    src/loaders/hf/hf_model_summary.cpp
+    src/loaders/hf/hf_model_summary.h
+    src/models/qwen3/qwen3_model.cpp
+    src/models/qwen3/qwen3_model.h
+    src/nn/causal_self_attention.cpp
+    src/nn/causal_self_attention.h
+    src/nn/qwen_decoder_block.cpp
+    src/nn/qwen_decoder_block.h
+    src/nn/qwen_attention.cpp
+    src/nn/qwen_attention.h
+    src/nn/qwen_mlp.cpp
+    src/nn/qwen_mlp.h
+    src/nn/rope.cpp
+    src/nn/rope.h
+    src/ops/elementwise_ops.cpp
+    src/ops/elementwise_ops.h
     src/ops/matmul.cpp
     src/ops/matmul.h
     src/ops/nn_ops.cpp
@@ -129,17 +172,19 @@ target_include_directories(cppinf PRIVATE
 )
 target_link_libraries(cppinf PRIVATE CLI11::CLI11 dnnl fmt::fmt nlohmann_json::nlohmann_json
                                      OpenMP::OpenMP_CXX spdlog::spdlog)
+cppinf_enable_warnings(cppinf)
+cppinf_enable_clang_tidy(cppinf)
 
 if(BUILD_TESTING)
     add_executable(cppinf_tests
         ${CPPINF_SOURCES}
         tests/cli/cli_app_test.cpp
         tests/files/safetensors_file_test.cpp
-         tests/loaders/hf/hf_config_test.cpp
-         tests/loaders/hf/hf_model_files_test.cpp
-         tests/loaders/hf/hf_model_summary_test.cpp
-         tests/models/qwen3/qwen3_model_test.cpp
-         tests/models/qwen3/qwen3_real_model_test.cpp
+        tests/loaders/hf/hf_config_test.cpp
+        tests/loaders/hf/hf_model_files_test.cpp
+        tests/loaders/hf/hf_model_summary_test.cpp
+        tests/models/qwen3/qwen3_model_test.cpp
+        tests/models/qwen3/qwen3_real_model_test.cpp
         tests/nn/causal_self_attention_test.cpp
         tests/nn/qwen_decoder_block_test.cpp
         tests/nn/qwen_attention_test.cpp
@@ -155,6 +200,8 @@ if(BUILD_TESTING)
     )
     target_link_libraries(cppinf_tests PRIVATE CLI11::CLI11 dnnl fmt::fmt GTest::gtest_main
                                                nlohmann_json::nlohmann_json OpenMP::OpenMP_CXX)
+    cppinf_enable_warnings(cppinf_tests)
+    cppinf_enable_clang_tidy(cppinf_tests)
 
     gtest_discover_tests(cppinf_tests)
 endif()
