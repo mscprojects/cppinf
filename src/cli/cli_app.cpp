@@ -1,13 +1,20 @@
 #include "cli/cli_app.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <limits>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
 #include <vector>
 
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
 
 #include "loaders/hf/hf_model_summary.h"
+#include "models/qwen3/qwen3_model.h"
+#include "ops/op_utils.h"
+#include "tokenizers/hf/hf_tokenizer.h"
 
 namespace cppinf::cli {
 namespace detail {
@@ -16,6 +23,12 @@ struct InspectHfOptions {
     std::filesystem::path model_dir;
     bool show_all_tensors{};
     std::size_t tensor_limit{8};
+};
+
+struct RunHfOptions {
+    std::filesystem::path model_dir;
+    std::string prompt;
+    std::size_t max_new_tokens{32};
 };
 
 std::vector<std::string> to_owned_args(std::span<const std::string_view> args) {
@@ -30,7 +43,10 @@ std::vector<std::string> to_owned_args(std::span<const std::string_view> args) {
 }
 
 std::string usage_text() {
-    return fmt::format("Usage:\n  cppinf\n  cppinf inspect hf <model-dir> [--all] [--limit <count>]\n");
+    return fmt::format("Usage:\n"
+                       "  cppinf\n"
+                       "  cppinf inspect hf <model-dir> [--all] [--limit <count>]\n"
+                       "  cppinf run hf <model-dir> --prompt <text> [--max-new-tokens <count>]\n");
 }
 
 CliResult invalid_usage() {
@@ -38,6 +54,66 @@ CliResult invalid_usage() {
         .exit_code = 1,
         .output = usage_text(),
     };
+}
+
+CliResult command_failure(std::string_view message) {
+    return CliResult{
+        .exit_code = 1,
+        .output = fmt::format("{}\n", message),
+    };
+}
+
+std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view name) {
+    if (dim <= 0) {
+        throw std::invalid_argument(fmt::format("{} must be positive.", name));
+    }
+    return static_cast<std::size_t>(dim);
+}
+
+std::int64_t select_argmax_token_id(const tensors::Tensor& logits) {
+    if (logits.tensor_info().shape.rank() != 2) {
+        throw std::invalid_argument("CLI generation requires rank-2 logits.");
+    }
+
+    const auto& dims = logits.tensor_info().shape.dims();
+    const auto sequence_length = checked_positive_dim_to_size(dims[0], "logits sequence length");
+    const auto vocab_size = checked_positive_dim_to_size(dims[1], "logits vocab size");
+    const auto last_row_offset = (sequence_length - 1) * vocab_size;
+
+    std::int64_t best_token_id = 0;
+    float best_logit = ops::detail::load_float_value(logits.tensor_info().dtype, logits.data(), last_row_offset);
+    for (std::size_t token_index = 1; token_index < vocab_size; ++token_index) {
+        const auto logit =
+            ops::detail::load_float_value(logits.tensor_info().dtype, logits.data(), last_row_offset + token_index);
+        if (logit > best_logit) {
+            best_logit = logit;
+            best_token_id = static_cast<std::int64_t>(token_index);
+        }
+    }
+
+    return best_token_id;
+}
+
+std::string run_hf_generation(const RunHfOptions& options) {
+    const auto tokenizer = tokenizers::hf::HfTokenizer::from_dir(options.model_dir);
+    const auto model = models::qwen3::Qwen3Model::from_dir(options.model_dir);
+
+    auto token_ids = tokenizer.encode(options.prompt);
+    if (token_ids.empty()) {
+        throw std::invalid_argument("run hf requires a prompt that encodes to at least one token.");
+    }
+
+    const auto eos_token_id = tokenizer.eos_token_id();
+    for (std::size_t step = 0; step < options.max_new_tokens; ++step) {
+        const auto logits = model.forward(token_ids);
+        const auto next_token_id = select_argmax_token_id(logits);
+        if (eos_token_id.has_value() && next_token_id == *eos_token_id) {
+            break;
+        }
+        token_ids.push_back(next_token_id);
+    }
+
+    return tokenizer.decode(token_ids);
 }
 
 } // namespace detail
@@ -51,6 +127,7 @@ CliResult run(std::span<const std::string_view> args) {
     }
 
     detail::InspectHfOptions inspect_hf_options;
+    detail::RunHfOptions run_hf_options;
     CLI::App app{"cppinf"};
 
     auto* inspect_subcommand = app.add_subcommand("inspect", "Inspect model artifacts.");
@@ -65,6 +142,17 @@ CliResult run(std::span<const std::string_view> args) {
     tensor_limit_option->check(CLI::PositiveNumber);
     all_tensors_option->excludes(tensor_limit_option);
 
+    auto* run_subcommand = app.add_subcommand("run", "Run model inference.");
+    run_subcommand->require_subcommand(1);
+
+    auto* run_hf_subcommand = run_subcommand->add_subcommand("hf", "Run greedy generation from a Hugging Face model.");
+    run_hf_subcommand->add_option("model_dir", run_hf_options.model_dir)->required();
+    run_hf_subcommand->add_option("--prompt", run_hf_options.prompt, "Prompt text.")->required();
+    auto* max_new_tokens_option =
+        run_hf_subcommand->add_option("--max-new-tokens", run_hf_options.max_new_tokens,
+                                      "Generate up to N new tokens.");
+    max_new_tokens_option->check(CLI::PositiveNumber);
+
     auto owned_args = detail::to_owned_args(args);
     std::vector<char*> argv;
     argv.reserve(owned_args.size());
@@ -78,14 +166,25 @@ CliResult run(std::span<const std::string_view> args) {
         return detail::invalid_usage();
     }
 
-    if (inspect_hf_subcommand->parsed()) {
-        const auto tensor_limit = inspect_hf_options.show_all_tensors ? std::numeric_limits<std::size_t>::max()
-                                                                      : inspect_hf_options.tensor_limit;
-        const auto summary = loaders::hf::load_model_summary(inspect_hf_options.model_dir, tensor_limit);
-        return CliResult{
-            .exit_code = 0,
-            .output = fmt::format("{}\n", loaders::hf::format_model_summary(summary)),
-        };
+    try {
+        if (inspect_hf_subcommand->parsed()) {
+            const auto tensor_limit = inspect_hf_options.show_all_tensors ? std::numeric_limits<std::size_t>::max()
+                                                                          : inspect_hf_options.tensor_limit;
+            const auto summary = loaders::hf::load_model_summary(inspect_hf_options.model_dir, tensor_limit);
+            return CliResult{
+                .exit_code = 0,
+                .output = fmt::format("{}\n", loaders::hf::format_model_summary(summary)),
+            };
+        }
+
+        if (run_hf_subcommand->parsed()) {
+            return CliResult{
+                .exit_code = 0,
+                .output = fmt::format("{}\n", detail::run_hf_generation(run_hf_options)),
+            };
+        }
+    } catch (const std::exception& error) {
+        return detail::command_failure(error.what());
     }
 
     return detail::invalid_usage();
