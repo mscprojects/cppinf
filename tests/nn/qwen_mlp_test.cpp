@@ -134,7 +134,7 @@ TEST_F(QwenMlpTest, GivenMismatchedDownProjection_WhenApplyingQwenMlp_ThenItThro
         .down_proj_weight = down_proj_weight.view(),
     };
 
-    EXPECT_THROW(static_cast<void>(qwen_mlp(hidden_states.view(), weights)), std::invalid_argument);
+    EXPECT_THROW(qwen_mlp(hidden_states.view(), weights), std::invalid_argument);
 }
 
 } // namespace cppinf::tests

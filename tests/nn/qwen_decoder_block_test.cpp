@@ -233,8 +233,7 @@ TEST_F(QwenDecoderBlockTest, GivenMismatchedLayerNormWeight_WhenApplyingQwenDeco
             },
     };
 
-    EXPECT_THROW(static_cast<void>(qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f)),
-                 std::invalid_argument);
+    EXPECT_THROW(qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f), std::invalid_argument);
 }
 
 } // namespace cppinf::tests

@@ -144,8 +144,7 @@ TEST_F(QwenAttentionTest, GivenMismatchedHeadShape_WhenApplyingQwenAttention_The
         .o_proj_weight = o_proj_weight.view(),
     };
 
-    EXPECT_THROW(static_cast<void>(qwen_attention(hidden_states.view(), weights, 3, 2, 4, 1e-6f)),
-                 std::invalid_argument);
+    EXPECT_THROW(qwen_attention(hidden_states.view(), weights, 3, 2, 4, 1e-6f), std::invalid_argument);
 }
 
 } // namespace cppinf::tests

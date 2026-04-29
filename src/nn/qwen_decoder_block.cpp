@@ -45,9 +45,7 @@ void validate_norm_weight(const tensors::TensorView& weight, std::string_view na
 }
 
 void validate_qwen_decoder_block_inputs(const tensors::TensorView& hidden_states,
-                                        const QwenDecoderBlockWeights& weights, std::size_t num_attention_heads,
-                                        std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
-                                        float rope_base) {
+                                        const QwenDecoderBlockWeights& weights, float norm_epsilon, float rope_base) {
     ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_decoder_block");
     if (!std::isfinite(norm_epsilon) || norm_epsilon < 0.0f) {
         throw std::invalid_argument("qwen_decoder_block requires a non-negative finite norm epsilon.");
@@ -73,10 +71,6 @@ void validate_qwen_decoder_block_inputs(const tensors::TensorView& hidden_states
     validate_norm_weight(weights.input_layernorm_weight, "qwen_decoder_block input_layernorm_weight", hidden_size);
     validate_norm_weight(weights.post_attention_layernorm_weight, "qwen_decoder_block post_attention_layernorm_weight",
                          hidden_size);
-
-    static_cast<void>(num_attention_heads);
-    static_cast<void>(num_key_value_heads);
-    static_cast<void>(head_dim);
 }
 
 } // namespace
@@ -85,8 +79,7 @@ tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, con
                                    std::size_t num_attention_heads, std::size_t num_key_value_heads,
                                    std::size_t head_dim, float norm_epsilon, std::size_t sequence_position_offset,
                                    float rope_base) {
-    validate_qwen_decoder_block_inputs(hidden_states, weights, num_attention_heads, num_key_value_heads, head_dim,
-                                       norm_epsilon, rope_base);
+    validate_qwen_decoder_block_inputs(hidden_states, weights, norm_epsilon, rope_base);
 
     // Residual edges stay in the public dtype, while individual kernels own any promotion they need.
     const auto attention_input = ops::rms_norm(hidden_states, weights.input_layernorm_weight, norm_epsilon);

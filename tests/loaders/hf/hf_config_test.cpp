@@ -60,7 +60,7 @@ TEST_F(HfConfigTest, GivenMissingField_WhenParsing_ThenItThrows) {
         "bos_token_id": 151643
     })";
 
-    EXPECT_THROW(static_cast<void>(HfConfig::from_json_text(json_text)), std::invalid_argument);
+    EXPECT_THROW(HfConfig::from_json_text(json_text), std::invalid_argument);
 }
 
 TEST_F(HfConfigTest, GivenUnsupportedTorchDtype_WhenParsing_ThenItThrows) {
@@ -83,7 +83,7 @@ TEST_F(HfConfigTest, GivenUnsupportedTorchDtype_WhenParsing_ThenItThrows) {
         "vocab_size": 151936
     })";
 
-    EXPECT_THROW(static_cast<void>(HfConfig::from_json_text(json_text)), std::invalid_argument);
+    EXPECT_THROW(HfConfig::from_json_text(json_text), std::invalid_argument);
 }
 
 } // namespace cppinf::tests
