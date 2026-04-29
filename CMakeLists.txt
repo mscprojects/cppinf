@@ -69,6 +69,8 @@ FetchContent_MakeAvailable(CLI11 fmt googletest nlohmann_json oneDNN spdlog)
 find_package(OpenMP REQUIRED)
 
 set(CPPINF_SOURCES
+    src/io/file.cpp
+    src/io/file.h
     src/cli/cli_app.cpp
     src/cli/cli_app.h
     src/files/safetensors_file.cpp

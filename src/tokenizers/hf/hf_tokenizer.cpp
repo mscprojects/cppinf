@@ -4,11 +4,11 @@
 #include <array>
 #include <cctype>
 #include <cstddef>
-#include <fstream>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
+#include "io/file.h"
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
@@ -22,18 +22,9 @@ using json = nlohmann::json;
 constexpr std::string_view k_qwen_split_pattern =
     R"((?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+)";
 
-std::string read_text_file(const std::filesystem::path& path) {
-    std::ifstream input(path);
-    if (!input) {
-        throw std::invalid_argument(fmt::format("Failed to open tokenizer file '{}'.", path.string()));
-    }
-
-    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
-}
-
 json parse_json_file(const std::filesystem::path& path) {
     try {
-        return json::parse(read_text_file(path));
+        return json::parse(io::read_text_file(path, "tokenizer file"));
     } catch (const json::parse_error& error) {
         throw std::invalid_argument(
             fmt::format("Failed to parse tokenizer JSON '{}': {}", path.string(), error.what()));

@@ -1,11 +1,11 @@
 #include "safetensors_file.h"
 
 #include <cstdint>
-#include <fstream>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
+#include "io/file.h"
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
@@ -159,26 +159,6 @@ ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
     return parsed_header;
 }
 
-std::vector<std::byte> read_file_bytes(const std::filesystem::path& path) {
-    const auto file_size = std::filesystem::file_size(path);
-    if (file_size > std::numeric_limits<std::size_t>::max()) {
-        throw std::overflow_error("Safetensors file is too large to load into memory.");
-    }
-
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
-        throw std::invalid_argument("Failed to open safetensors file.");
-    }
-
-    std::vector<std::byte> file_bytes(static_cast<std::size_t>(file_size));
-    file.read(reinterpret_cast<char*>(file_bytes.data()), static_cast<std::streamsize>(file_bytes.size()));
-    if (!file) {
-        throw std::invalid_argument("Failed to read safetensors file.");
-    }
-
-    return file_bytes;
-}
-
 } // namespace detail
 
 SafetensorsFile::SafetensorsFile(std::vector<std::byte> file_bytes, std::size_t tensor_data_offset,
@@ -201,7 +181,7 @@ SafetensorsFile SafetensorsFile::from_bytes(std::vector<std::byte> file_bytes) {
 }
 
 SafetensorsFile SafetensorsFile::from_file(const std::filesystem::path& path) {
-    return from_bytes(detail::read_file_bytes(path));
+    return from_bytes(io::read_binary_file(path, "safetensors file"));
 }
 
 bool SafetensorsFile::contains_tensor(std::string_view name) const {
