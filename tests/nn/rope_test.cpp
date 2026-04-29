@@ -109,10 +109,9 @@ TEST_F(RopeTest, GivenZeroPositionOffset_WhenApplyingRope_ThenValuesStayTheSame)
 TEST_F(RopeTest, GivenTorchOracleBf16Inputs_WhenApplyingRope_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/rope_oracle.py.
     // Case: bf16_position_offset_2.
-    const auto input = make_bf16_tensor(
-        "input", {2, 3, 4},
-        {1.0f, -0.5f, 0.25f, 1.5f, -1.25f, 0.75f, 1.0f, -0.25f, 0.5f, 1.25f, -0.75f, 0.5f, -0.5f, 1.0f, 1.5f,
-         -1.25f, 0.75f, -1.5f, 0.5f, 1.0f, 1.25f, 0.25f, -1.0f, 0.75f});
+    const auto input = make_bf16_tensor("input", {2, 3, 4}, {1.0f,  -0.5f, 0.25f,  1.5f, -1.25f, 0.75f, 1.0f,  -0.25f,
+                                                             0.5f,  1.25f, -0.75f, 0.5f, -0.5f,  1.0f,  1.5f,  -1.25f,
+                                                             0.75f, -1.5f, 0.5f,   1.0f, 1.25f,  0.25f, -1.0f, 0.75f});
 
     const auto result = apply_rope(input.view(), 2);
 
@@ -120,10 +119,10 @@ TEST_F(RopeTest, GivenTorchOracleBf16Inputs_WhenApplyingRope_ThenExpectedValuesA
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
     EXPECT_EQ(Shape({2, 3, 4}), result.tensor_info().shape);
     expect_float_values_near(result.view(),
-                             {-0.64453125f, -0.50390625f, 0.8046875f, 1.5f, 1.09375f, 0.75f, -1.1640625f,
-                              -0.248046875f, -0.89453125f, 1.25f, 0.11181640625f, 0.50390625f, -1.15625f, 1.0f,
-                              -1.078125f, -1.25f, -0.8125f, -1.5f, -0.388671875f, 0.99609375f, -1.5703125f,
-                              0.2470703125f, -0.29296875f, 0.75f},
+                             {-0.64453125f,  -0.50390625f,  0.8046875f,   1.5f,          1.09375f,       0.75f,
+                              -1.1640625f,   -0.248046875f, -0.89453125f, 1.25f,         0.11181640625f, 0.50390625f,
+                              -1.15625f,     1.0f,          -1.078125f,   -1.25f,        -0.8125f,       -1.5f,
+                              -0.388671875f, 0.99609375f,   -1.5703125f,  0.2470703125f, -0.29296875f,   0.75f},
                              1e-6f);
 }
 

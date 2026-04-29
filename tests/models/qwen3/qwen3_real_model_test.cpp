@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -11,19 +12,59 @@
 
 #include <gtest/gtest.h>
 
+#include "files/safetensors_file.h"
 #include "models/qwen3/qwen3_model.h"
 #include "tensors/bfloat16.h"
+#include "tensors/dtype.h"
 #include "tensors/tensor.h"
+#include "tensors/tensor_view.h"
 
+using cppinf::files::SafetensorsFile;
 using cppinf::models::qwen3::Qwen3Model;
 using cppinf::tensors::bfloat16_bits_to_float;
 using cppinf::tensors::DType;
 using cppinf::tensors::Tensor;
+using cppinf::tensors::TensorView;
 
 class Qwen3RealModelTest : public ::testing::Test {
   protected:
+    std::filesystem::path oracle_logits_path() const {
+        return std::filesystem::path(__FILE__).parent_path() / "qwen3_real_last_token_logits.safetensors";
+    }
+
     const char* real_model_dir_env() const {
         return std::getenv("CPPINF_QWEN3_REAL_MODEL_DIR");
+    }
+
+    std::vector<float> read_float_values(const TensorView& tensor_view) const {
+        std::vector<float> values;
+        values.reserve(tensor_view.tensor_info().shape.num_elements());
+
+        switch (tensor_view.tensor_info().dtype) {
+        case DType::BF16: {
+            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
+                std::uint16_t bits = 0;
+                std::memcpy(&bits, tensor_view.data().data() + index * sizeof(std::uint16_t), sizeof(bits));
+                values.push_back(bfloat16_bits_to_float(bits));
+            }
+            return values;
+        }
+        case DType::F32: {
+            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
+                float value = 0.0f;
+                std::memcpy(&value, tensor_view.data().data() + index * sizeof(float), sizeof(value));
+                values.push_back(value);
+            }
+            return values;
+        }
+        case DType::F16:
+        case DType::I32:
+        case DType::I64:
+        case DType::U8:
+            throw std::invalid_argument("read_float_values supports only bf16 and f32 tensors.");
+        }
+
+        throw std::invalid_argument("read_float_values received an unsupported tensor dtype.");
     }
 
     std::vector<float> read_last_token_values(const Tensor& tensor) const {
@@ -38,36 +79,36 @@ class Qwen3RealModelTest : public ::testing::Test {
             throw std::invalid_argument("read_last_token_values requires non-empty tensor dimensions.");
         }
 
-        std::vector<float> values;
-        values.reserve(vocabulary_size);
+        const auto row_byte_size = vocabulary_size * cppinf::tensors::element_size_bytes(tensor.tensor_info().dtype);
+        const auto row_offset = (sequence_length - 1) * row_byte_size;
+        return read_float_values(TensorView(
+            cppinf::tensors::TensorInfo{
+                .name = "last_token_logits",
+                .dtype = tensor.tensor_info().dtype,
+                .shape = cppinf::tensors::Shape({static_cast<std::int64_t>(vocabulary_size)}),
+                .byte_offset = 0,
+            },
+            std::span<const std::byte>(tensor.bytes()).subspan(row_offset, row_byte_size)));
+    }
 
-        switch (tensor.tensor_info().dtype) {
-        case DType::BF16: {
-            const auto row_offset = (sequence_length - 1) * vocabulary_size * sizeof(std::uint16_t);
-            for (std::size_t index = 0; index < vocabulary_size; ++index) {
-                std::uint16_t bits = 0;
-                std::memcpy(&bits, tensor.bytes().data() + row_offset + index * sizeof(std::uint16_t), sizeof(bits));
-                values.push_back(bfloat16_bits_to_float(bits));
-            }
-            return values;
-        }
-        case DType::F32: {
-            const auto row_offset = (sequence_length - 1) * vocabulary_size * sizeof(float);
-            for (std::size_t index = 0; index < vocabulary_size; ++index) {
-                float value = 0.0f;
-                std::memcpy(&value, tensor.bytes().data() + row_offset + index * sizeof(float), sizeof(value));
-                values.push_back(value);
-            }
-            return values;
-        }
-        case DType::F16:
-        case DType::I32:
-        case DType::I64:
-        case DType::U8:
-            throw std::invalid_argument("read_last_token_values supports only bf16 and f32 tensors.");
+    std::vector<float> load_oracle_last_token_values() const {
+        const auto oracle_path = oracle_logits_path();
+        if (!std::filesystem::exists(oracle_path)) {
+            throw std::invalid_argument("Real-model oracle safetensors file is missing.");
         }
 
-        throw std::invalid_argument("read_last_token_values received an unsupported tensor dtype.");
+        const auto oracle_file = SafetensorsFile::from_file(oracle_path);
+        return read_float_values(oracle_file.tensor_view("last_token_logits"));
+    }
+
+    std::size_t overlap_count(const std::vector<std::size_t>& lhs, const std::vector<std::size_t>& rhs) const {
+        std::size_t count = 0;
+        for (const auto value : lhs) {
+            if (std::find(rhs.begin(), rhs.end(), value) != rhs.end()) {
+                ++count;
+            }
+        }
+        return count;
     }
 
     std::vector<std::pair<std::size_t, float>> top_k(const std::vector<float>& values, std::size_t k) const {
@@ -95,14 +136,13 @@ class Qwen3RealModelTest : public ::testing::Test {
 
         std::size_t offset = 0;
         for (const auto expected_value : expected) {
-            EXPECT_NEAR(expected_value, values[start_index + offset], tolerance)
-                << "index=" << (start_index + offset);
+            EXPECT_NEAR(expected_value, values[start_index + offset], tolerance) << "index=" << (start_index + offset);
             ++offset;
         }
     }
 };
 
-TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenLastTokenMatchesOracle) {
+TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenTopFiveLikelyTokensStayCloseToOracle) {
     const char* const model_dir_env = real_model_dir_env();
     if (model_dir_env == nullptr || *model_dir_env == '\0') {
         GTEST_SKIP() << "Set CPPINF_QWEN3_REAL_MODEL_DIR to run the real Qwen3 oracle test.";
@@ -111,43 +151,66 @@ TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenLastTokenM
     const std::filesystem::path model_dir = model_dir_env;
     ASSERT_TRUE(std::filesystem::exists(model_dir)) << model_dir;
 
-    // Golden values generated with tests/models/qwen3/qwen3_real_model_oracle.py.
-    // Case: Qwen3-0.6B-Base, token_ids=[151643, 42, 1024, 4096].
     const std::vector<std::int64_t> token_ids{151643, 42, 1024, 4096};
     const auto model = Qwen3Model::from_dir(model_dir);
     const auto logits = model.forward(token_ids);
+    const auto oracle_last_token_values = load_oracle_last_token_values();
     const auto last_token_values = read_last_token_values(logits);
 
     EXPECT_EQ(std::size_t{151936}, model.config().vocab_size);
     EXPECT_EQ(DType::BF16, logits.tensor_info().dtype);
+    ASSERT_EQ(oracle_last_token_values.size(), last_token_values.size());
     ASSERT_EQ(std::size_t{151936}, last_token_values.size());
 
-    const auto top_k_values = top_k(last_token_values, 8);
-    ASSERT_EQ(std::size_t{8}, top_k_values.size());
+    const auto oracle_top_k_values = top_k(oracle_last_token_values, 5);
+    const auto actual_top_k_values = top_k(last_token_values, 5);
+    ASSERT_EQ(std::size_t{5}, oracle_top_k_values.size());
+    ASSERT_EQ(std::size_t{5}, actual_top_k_values.size());
 
-    // HF eager CPU BF16 and cppinf are close but not bit-exact today, so the real-model parity check
-    // asserts on next-token agreement, stable top-4 membership, and bounded logit drift on sampled slices.
-    EXPECT_EQ(std::size_t{284}, top_k_values.front().first);
-    EXPECT_NEAR(18.25f, top_k_values.front().second, 0.25f);
+    EXPECT_EQ(oracle_top_k_values.front().first, actual_top_k_values.front().first);
+    EXPECT_NEAR(oracle_top_k_values.front().second, actual_top_k_values.front().second, 0.25f);
 
-    std::vector<std::size_t> actual_top_4_ids;
-    for (std::size_t index = 0; index < 4; ++index) {
-        actual_top_4_ids.push_back(top_k_values[index].first);
+    std::vector<std::size_t> oracle_top_k_ids;
+    std::vector<std::size_t> actual_top_k_ids;
+    for (std::size_t index = 0; index < 5; ++index) {
+        oracle_top_k_ids.push_back(oracle_top_k_values[index].first);
+        actual_top_k_ids.push_back(actual_top_k_values[index].first);
+
+        const auto oracle_id = oracle_top_k_values[index].first;
+        EXPECT_NEAR(oracle_top_k_values[index].second, last_token_values[oracle_id], 0.5f)
+            << "oracle top-5 token id=" << oracle_id;
     }
-    std::sort(actual_top_4_ids.begin(), actual_top_4_ids.end());
-    const std::vector<std::size_t> expected_top_4_ids{25, 284, 445, 486};
-    EXPECT_EQ(expected_top_4_ids, actual_top_4_ids);
 
-    expect_slice_near(last_token_values, 0,
-                      {11.9375f, 14.0f, 10.0f, 12.0f, 10.8125f, 14.4375f, 11.1875f, 15.1875f,
-                       14.375f, 14.125f, 9.8125f, 15.25f, 9.3125f, 11.0f, 10.0f, 12.0625f},
-                      0.5f);
-    expect_slice_near(last_token_values, 1024,
-                      {10.1875f, 3.578125f, 7.40625f, 9.1875f, 5.96875f, 8.6875f, 6.375f, 7.75f,
-                       8.625f, 5.40625f, 10.1875f, 7.15625f, 10.25f, 3.671875f, 1.828125f, 7.90625f},
-                      0.5f);
-    expect_slice_near(last_token_values, last_token_values.size() - 16,
-                      {1.046875f, 1.046875f, 1.046875f, 1.046875f, 1.046875f, 1.046875f, 1.046875f, 1.046875f,
-                       1.046875f, 1.046875f, 1.046875f, 1.046875f, 1.046875f, 1.046875f, 1.046875f, 1.046875f},
-                      0.25f);
+    EXPECT_GE(overlap_count(oracle_top_k_ids, actual_top_k_ids), std::size_t{4});
+}
+
+TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenFullLastTokenLogitsStayCloseToOracle) {
+    const char* const model_dir_env = real_model_dir_env();
+    if (model_dir_env == nullptr || *model_dir_env == '\0') {
+        GTEST_SKIP() << "Set CPPINF_QWEN3_REAL_MODEL_DIR to run the real Qwen3 oracle test.";
+    }
+
+    const std::filesystem::path model_dir = model_dir_env;
+    ASSERT_TRUE(std::filesystem::exists(model_dir)) << model_dir;
+
+    const std::vector<std::int64_t> token_ids{151643, 42, 1024, 4096};
+    const auto model = Qwen3Model::from_dir(model_dir);
+    const auto logits = model.forward(token_ids);
+    const auto oracle_last_token_values = load_oracle_last_token_values();
+    const auto last_token_values = read_last_token_values(logits);
+
+    ASSERT_EQ(oracle_last_token_values.size(), last_token_values.size());
+
+    float max_abs_diff = 0.0f;
+    double sum_abs_diff = 0.0;
+    for (std::size_t index = 0; index < last_token_values.size(); ++index) {
+        const auto abs_diff = std::abs(last_token_values[index] - oracle_last_token_values[index]);
+        max_abs_diff = std::max(max_abs_diff, abs_diff);
+        sum_abs_diff += abs_diff;
+    }
+
+    const auto mean_abs_diff = static_cast<float>(sum_abs_diff / static_cast<double>(last_token_values.size()));
+
+    EXPECT_LE(max_abs_diff, 0.5f);
+    EXPECT_LE(mean_abs_diff, 0.2f);
 }

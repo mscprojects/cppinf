@@ -91,7 +91,8 @@ tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_c
     const auto merged_head_size =
         checked_positive_dim_to_size(dims[1], fmt::format("{} merged head size", result_name));
     if (merged_head_size != head_count * head_dim) {
-        throw std::invalid_argument(fmt::format("{} requires merged head size to equal head_count * head_dim.", result_name));
+        throw std::invalid_argument(
+            fmt::format("{} requires merged head size to equal head_count * head_dim.", result_name));
     }
 
     auto result = tensors::Tensor::zeros(make_result_info(
@@ -140,7 +141,8 @@ tensors::Tensor merge_heads(const tensors::TensorView& input, std::string_view r
     return result;
 }
 
-tensors::Tensor repeat_heads(const tensors::TensorView& input, std::size_t target_head_count, std::string_view result_name) {
+tensors::Tensor repeat_heads(const tensors::TensorView& input, std::size_t target_head_count,
+                             std::string_view result_name) {
     if (input.tensor_info().dtype != tensors::DType::F32 || input.tensor_info().shape.rank() != 3) {
         throw std::invalid_argument("repeat_heads requires a rank-3 f32 tensor.");
     }
@@ -239,9 +241,8 @@ void validate_qwen_attention_inputs(const tensors::TensorView& hidden_states, co
 } // namespace
 
 tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
-                               std::size_t num_attention_heads, std::size_t num_key_value_heads,
-                               std::size_t head_dim, float norm_epsilon, std::size_t sequence_position_offset,
-                               float rope_base) {
+                               std::size_t num_attention_heads, std::size_t num_key_value_heads, std::size_t head_dim,
+                               float norm_epsilon, std::size_t sequence_position_offset, float rope_base) {
     validate_qwen_attention_inputs(hidden_states, weights, num_attention_heads, num_key_value_heads, head_dim,
                                    norm_epsilon, rope_base);
 
@@ -288,7 +289,8 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
         return rename_tensor("qwen_attention_result", result_f32);
     }
 
-    return rename_tensor("qwen_attention_result", cppinf::ops::cast(result_f32.view(), hidden_states.tensor_info().dtype));
+    return rename_tensor("qwen_attention_result",
+                         cppinf::ops::cast(result_f32.view(), hidden_states.tensor_info().dtype));
 }
 
 } // namespace cppinf::nn

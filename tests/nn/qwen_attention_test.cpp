@@ -88,32 +88,31 @@ class QwenAttentionTest : public ::testing::Test {
 TEST_F(QwenAttentionTest, GivenTorchOracleF32Inputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_attention_oracle.py.
     // Case: f32_explicit_head_dim.
-    const auto hidden_states = make_f32_tensor(
-        "hidden_states", {3, 6},
-        {0.29f, 1.20f, 0.75f, -0.67f, 0.26f, 0.29f, 1.30f, 0.24f, -0.61f, -1.14f, -1.26f, 0.13f, 0.10f, -1.28f,
-         0.28f, -0.54f, 0.39f, -0.86f});
+    const auto hidden_states = make_f32_tensor("hidden_states", {3, 6},
+                                               {0.29f, 1.20f, 0.75f, -0.67f, 0.26f, 0.29f, 1.30f, 0.24f, -0.61f, -1.14f,
+                                                -1.26f, 0.13f, 0.10f, -1.28f, 0.28f, -0.54f, 0.39f, -0.86f});
     const auto q_proj_weight = make_f32_tensor(
         "q_proj_weight", {8, 6},
-        {0.60f, 0.95f, 0.54f, 0.02f, -0.86f, -0.76f, -0.09f, -1.07f, -0.08f, -1.01f, -0.84f, 0.82f, 0.24f, 0.93f,
-         -1.25f, -0.46f, 0.89f, -0.49f, -0.49f, 0.79f, -0.77f, 1.27f, 0.47f, 0.74f, 0.19f, -0.81f, -0.42f, 0.26f,
-         -0.08f, -0.54f, 0.89f, -0.34f, -1.07f, 1.08f, -0.38f, -0.80f, 0.36f, 0.44f, 0.39f, -0.38f, -0.22f, -0.69f,
-         1.26f, -0.55f, -0.36f, 1.20f, 0.19f, -1.37f});
+        {0.60f, 0.95f,  0.54f,  0.02f,  -0.86f, -0.76f, -0.09f, -1.07f, -0.08f, -1.01f, -0.84f, 0.82f,
+         0.24f, 0.93f,  -1.25f, -0.46f, 0.89f,  -0.49f, -0.49f, 0.79f,  -0.77f, 1.27f,  0.47f,  0.74f,
+         0.19f, -0.81f, -0.42f, 0.26f,  -0.08f, -0.54f, 0.89f,  -0.34f, -1.07f, 1.08f,  -0.38f, -0.80f,
+         0.36f, 0.44f,  0.39f,  -0.38f, -0.22f, -0.69f, 1.26f,  -0.55f, -0.36f, 1.20f,  0.19f,  -1.37f});
     const auto q_norm_weight = make_f32_tensor("q_norm_weight", {4}, {1.16f, 0.83f, 1.30f, 1.01f});
-    const auto k_proj_weight = make_f32_tensor(
-        "k_proj_weight", {4, 6},
-        {0.55f, -1.33f, 0.44f, 0.76f, 0.36f, 0.63f, -1.19f, -1.37f, 0.85f, -0.95f, -0.13f, -1.33f, 0.58f, 1.08f,
-         0.27f, -0.48f, -0.25f, -0.17f, -0.11f, 0.08f, 1.26f, -0.28f, 0.74f, 0.32f});
+    const auto k_proj_weight =
+        make_f32_tensor("k_proj_weight", {4, 6},
+                        {0.55f, -1.33f, 0.44f, 0.76f,  0.36f,  0.63f,  -1.19f, -1.37f, 0.85f, -0.95f, -0.13f, -1.33f,
+                         0.58f, 1.08f,  0.27f, -0.48f, -0.25f, -0.17f, -0.11f, 0.08f,  1.26f, -0.28f, 0.74f,  0.32f});
     const auto k_norm_weight = make_f32_tensor("k_norm_weight", {4}, {0.60f, 0.59f, 0.82f, 0.77f});
-    const auto v_proj_weight = make_f32_tensor(
-        "v_proj_weight", {4, 6},
-        {-0.70f, 0.14f, -1.00f, -0.32f, -0.95f, 0.29f, 0.44f, -0.86f, 0.57f, -0.77f, -0.69f, -0.73f, 1.23f,
-         -1.25f, -0.15f, -0.33f, -1.17f, -0.29f, 1.36f, -1.13f, 0.21f, 0.13f, -0.61f, 0.08f});
+    const auto v_proj_weight =
+        make_f32_tensor("v_proj_weight", {4, 6},
+                        {-0.70f, 0.14f,  -1.00f, -0.32f, -0.95f, 0.29f,  0.44f, -0.86f, 0.57f, -0.77f, -0.69f, -0.73f,
+                         1.23f,  -1.25f, -0.15f, -0.33f, -1.17f, -0.29f, 1.36f, -1.13f, 0.21f, 0.13f,  -0.61f, 0.08f});
     const auto o_proj_weight = make_f32_tensor(
         "o_proj_weight", {6, 8},
-        {-0.29f, 0.44f, -0.06f, 0.34f, -1.39f, -0.64f, 0.78f, -0.16f, -1.35f, -1.29f, -0.30f, -0.11f, -0.11f,
-         -0.50f, -0.79f, 0.16f, -0.88f, 0.82f, 0.74f, -0.86f, -0.55f, -0.61f, 0.82f, 0.63f, 1.00f, -0.49f, -1.30f,
-         -0.85f, -0.06f, 0.50f, -0.32f, 1.07f, 1.33f, 0.77f, 1.39f, -0.28f, 0.31f, 0.94f, -1.12f, -0.20f, 0.14f,
-         0.63f, 0.22f, -0.86f, 0.21f, 0.75f, 0.06f, -0.50f});
+        {-0.29f, 0.44f,  -0.06f, 0.34f,  -1.39f, -0.64f, 0.78f,  -0.16f, -1.35f, -1.29f, -0.30f, -0.11f,
+         -0.11f, -0.50f, -0.79f, 0.16f,  -0.88f, 0.82f,  0.74f,  -0.86f, -0.55f, -0.61f, 0.82f,  0.63f,
+         1.00f,  -0.49f, -1.30f, -0.85f, -0.06f, 0.50f,  -0.32f, 1.07f,  1.33f,  0.77f,  1.39f,  -0.28f,
+         0.31f,  0.94f,  -1.12f, -0.20f, 0.14f,  0.63f,  0.22f,  -0.86f, 0.21f,  0.75f,  0.06f,  -0.50f});
 
     const auto weights = QwenAttentionWeights{
         .q_proj_weight = q_proj_weight.view(),
@@ -138,9 +137,8 @@ TEST_F(QwenAttentionTest, GivenTorchOracleF32Inputs_WhenApplyingQwenAttention_Th
 }
 
 TEST_F(QwenAttentionTest, GivenMismatchedHeadShape_WhenApplyingQwenAttention_ThenItThrows) {
-    const auto hidden_states = make_f32_tensor("hidden_states", {2, 6},
-                                               {1.0f, 0.5f, -0.5f, 1.5f, -1.0f, 0.25f, 0.75f, -0.25f, 0.5f,
-                                                -1.5f, 1.0f, 0.25f});
+    const auto hidden_states = make_f32_tensor(
+        "hidden_states", {2, 6}, {1.0f, 0.5f, -0.5f, 1.5f, -1.0f, 0.25f, 0.75f, -0.25f, 0.5f, -1.5f, 1.0f, 0.25f});
     const auto q_proj_weight = make_f32_filled_tensor("q_proj_weight", {8, 6}, 0.0f);
     const auto q_norm_weight = make_f32_tensor("q_norm_weight", {4}, {1.0f, 1.0f, 1.0f, 1.0f});
     const auto k_proj_weight = make_f32_filled_tensor("k_proj_weight", {4, 6}, 0.0f);
