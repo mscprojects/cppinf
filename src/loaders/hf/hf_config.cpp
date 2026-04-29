@@ -1,10 +1,10 @@
 #include "loaders/hf/hf_config.h"
 
 #include <cstdint>
-#include <fstream>
 #include <limits>
 #include <stdexcept>
 
+#include "io/file.h"
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
@@ -102,15 +102,6 @@ tensors::DType parse_torch_dtype(std::string_view torch_dtype) {
     throw std::invalid_argument(fmt::format("Unsupported HF torch_dtype '{}'.", torch_dtype));
 }
 
-std::string read_file_text(const std::filesystem::path& path) {
-    std::ifstream file(path);
-    if (!file) {
-        throw std::invalid_argument(fmt::format("Failed to open HF config file '{}'.", path.string()));
-    }
-
-    return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-}
-
 } // namespace detail
 
 HfConfig HfConfig::from_json_text(std::string_view json_text) {
@@ -152,7 +143,7 @@ HfConfig HfConfig::from_json_text(std::string_view json_text) {
 }
 
 HfConfig HfConfig::from_file(const std::filesystem::path& path) {
-    return from_json_text(detail::read_file_text(path));
+    return from_json_text(io::read_text_file(path, "HF config file"));
 }
 
 } // namespace cppinf::loaders::hf

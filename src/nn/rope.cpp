@@ -105,8 +105,8 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
 
                 const auto first_value =
                     ops::detail::load_float_value(input_f32.tensor_info().dtype, input_f32.data(), first_index);
-                const auto second_value = ops::detail::load_float_value(input_f32.tensor_info().dtype,
-                                                                        input_f32.data(), second_index);
+                const auto second_value =
+                    ops::detail::load_float_value(input_f32.tensor_info().dtype, input_f32.data(), second_index);
 
                 ops::detail::store_float_value(tensors::DType::F32, result_f32.mutable_data(), first_index,
                                                first_value * cosine - second_value * sine);

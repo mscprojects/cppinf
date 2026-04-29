@@ -15,8 +15,8 @@
 namespace cppinf::tests {
 
 using nn::causal_self_attention;
-using tensors::DType;
 using tensors::bfloat16_bits_to_float;
+using tensors::DType;
 using tensors::float_to_bfloat16_bits;
 using tensors::Shape;
 using tensors::Tensor;

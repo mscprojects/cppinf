@@ -14,14 +14,14 @@
 
 namespace cppinf::tests {
 
+using tensors::bfloat16_bits_to_float;
 using tensors::DType;
+using tensors::element_size_bytes;
+using tensors::float_to_bfloat16_bits;
 using tensors::Shape;
 using tensors::Tensor;
 using tensors::TensorInfo;
 using tensors::TensorView;
-using tensors::bfloat16_bits_to_float;
-using tensors::element_size_bytes;
-using tensors::float_to_bfloat16_bits;
 using tensors::to_string;
 
 class TensorTest : public ::testing::Test {
@@ -101,8 +101,7 @@ TEST_F(TensorTest, GivenOwnedTensor_WhenQueryingView_ThenTensorViewMatchesStorag
 
     EXPECT_EQ(std::size_t{16}, tensor.byte_size());
     EXPECT_EQ(std::size_t{16}, tensor_view.byte_size());
-    EXPECT_EQ(std::string("Tensor(name=\"activation\", dtype=f32, shape=[2, 2], bytes=16)"),
-              to_string(tensor));
+    EXPECT_EQ(std::string("Tensor(name=\"activation\", dtype=f32, shape=[2, 2], bytes=16)"), to_string(tensor));
 }
 
 TEST_F(TensorTest, GivenNonZeroOffset_WhenCreatingTensor_ThenItThrows) {
