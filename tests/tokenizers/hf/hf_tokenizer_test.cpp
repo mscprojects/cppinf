@@ -129,8 +129,13 @@ class HfTokenizerTest : public ::testing::Test {
             })");
     }
 
-    const char* real_model_dir_env() const {
-        return std::getenv("CPPINF_QWEN3_REAL_MODEL_DIR");
+    std::filesystem::path real_model_dir() const {
+        const char* const model_dir_env = std::getenv("CPPINF_QWEN3_REAL_MODEL_DIR");
+        if (model_dir_env != nullptr && *model_dir_env != '\0') {
+            return model_dir_env;
+        }
+
+        throw std::invalid_argument("CPPINF_QWEN3_REAL_MODEL_DIR must be set for real tokenizer tests.");
     }
 
     const std::filesystem::path& temp_dir() const {
@@ -168,12 +173,7 @@ TEST_F(HfTokenizerTest, GivenUnknownTokenId_WhenDecoding_ThenItThrows) {
 }
 
 TEST_F(HfTokenizerTest, GivenRealQwenTokenizer_WhenEncodingAndDecoding_ThenExpectedOracleValuesAreReturned) {
-    const char* const model_dir_env = real_model_dir_env();
-    if (model_dir_env == nullptr || *model_dir_env == '\0') {
-        GTEST_SKIP() << "Set CPPINF_QWEN3_REAL_MODEL_DIR to run the real tokenizer oracle test.";
-    }
-
-    const std::filesystem::path model_dir = model_dir_env;
+    const std::filesystem::path model_dir = real_model_dir();
     ASSERT_TRUE(std::filesystem::exists(model_dir)) << model_dir;
 
     const auto tokenizer = HfTokenizer::from_dir(model_dir);
