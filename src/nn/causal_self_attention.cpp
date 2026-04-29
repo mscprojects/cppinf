@@ -51,6 +51,8 @@ tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, 
     auto masked_scores = tensors::Tensor::zeros(
         tensors::make_result_tensor_info("causal_attention_scores", tensors::DType::F32, scores.tensor_info().shape));
 
+    // Query position i may only see the cached prefix plus tokens up to i in the current chunk, so future keys become
+    // -inf before softmax.
     for (std::size_t query_index = 0; query_index < query_sequence_length; ++query_index) {
         const auto last_allowed_key = past_sequence_length + query_index;
         for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
@@ -135,7 +137,8 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
     std::optional<tensors::Tensor> query_storage;
     std::optional<tensors::Tensor> key_storage;
     std::optional<tensors::Tensor> value_storage;
-    // Score construction stays in f32 so masking and softmax keep their stable reference behavior.
+    // Convert q/k/v to f32 for stable score construction and softmax, while keeping the logical layouts
+    // [heads, seq, head_dim].
     const auto query_f32 =
         ops::detail::maybe_cast_to_dtype(query, tensors::DType::F32, query_storage, "causal_self_attention_result");
     const auto key_f32 =
@@ -148,6 +151,8 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
                                          tensors::Shape({query_dims[0], query_dims[1], value_dims[2]})));
 
     for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
+        // Slice one head at a time and flatten away the head axis so matmul sees ordinary matrices:
+        // [seq_q, head_dim], [seq_k, head_dim], and [seq_k, value_dim].
         const auto query_head = ops::reshape(ops::narrow(query_f32, 0, head_index, 1),
                                              tensors::Shape({static_cast<std::int64_t>(query_sequence_length),
                                                              static_cast<std::int64_t>(query_head_size)}));
@@ -158,6 +163,8 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
                                              tensors::Shape({static_cast<std::int64_t>(key_sequence_length),
                                                              static_cast<std::int64_t>(value_head_size)}));
 
+        // Q * K^T gives raw scores [seq_q, seq_k], scaling and masking turn them into valid causal scores, softmax
+        // makes them probabilities over keys, and the final matmul with V returns the weighted sum [seq_q, value_dim].
         const auto transposed_key = ops::transpose_2d(key_head);
         const auto attention_scores = ops::matmul(query_head, transposed_key.view());
         const auto masked_scores =

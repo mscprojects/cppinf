@@ -63,6 +63,8 @@ tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_c
         tensors::Shape({static_cast<std::int64_t>(head_count), static_cast<std::int64_t>(sequence_length),
                         static_cast<std::int64_t>(head_dim)})));
 
+    // Move from the packed per-token layout [seq, heads * head_dim] to the head-major layout [heads, seq, head_dim]
+    // used by attention.
     const auto element_size = tensors::element_size_bytes(input.tensor_info().dtype);
     const auto head_bytes = head_dim * element_size;
     for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
@@ -92,6 +94,7 @@ tensors::Tensor merge_heads(const tensors::TensorView& input, std::string_view r
         result_name, input.tensor_info().dtype,
         tensors::Shape({static_cast<std::int64_t>(sequence_length), static_cast<std::int64_t>(merged_head_size)})));
 
+    // Undo split_heads by packing the head-major layout [heads, seq, head_dim] back into [seq, heads * head_dim].
     const auto element_size = tensors::element_size_bytes(input.tensor_info().dtype);
     const auto head_bytes = head_dim * element_size;
     for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
@@ -126,6 +129,8 @@ tensors::Tensor repeat_heads(const tensors::TensorView& input, std::size_t targe
         tensors::Shape({static_cast<std::int64_t>(target_head_count), static_cast<std::int64_t>(sequence_length),
                         static_cast<std::int64_t>(head_dim)})));
 
+    // Grouped-query attention keeps fewer key/value heads than query heads, so duplicate each K/V head until the
+    // tensor has one head slot per query head.
     const auto repeat_count = target_head_count / input_head_count;
     const auto bytes_per_head = sequence_length * head_dim * tensors::element_size_bytes(input.tensor_info().dtype);
     for (std::size_t head_index = 0; head_index < target_head_count; ++head_index) {
@@ -215,12 +220,14 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
     validate_qwen_attention_inputs(hidden_states, weights, num_attention_heads, num_key_value_heads, head_dim,
                                    norm_epsilon, rope_base);
 
-    // Project hidden states into query, key, and value channels.
+    // Project hidden states [seq, hidden] into packed query, key, and value channels with shapes
+    // [seq, q_heads * head_dim], [seq, kv_heads * head_dim], and [seq, kv_heads * head_dim].
     const auto query_projection = linear_project(hidden_states, weights.q_proj_weight);
     const auto key_projection = linear_project(hidden_states, weights.k_proj_weight);
     const auto value_projection = linear_project(hidden_states, weights.v_proj_weight);
 
-    // Layout-only reshapes keep the current tensor dtype untouched.
+    // Split the packed head dimension so attention can work head-by-head: queries become [q_heads, seq, head_dim], and
+    // keys/values become [kv_heads, seq, head_dim].
     const auto query_heads =
         split_heads(query_projection.view(), num_attention_heads, head_dim, "qwen_attention_query_heads");
     const auto key_heads =
@@ -228,15 +235,20 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
     const auto value_heads =
         split_heads(value_projection.view(), num_key_value_heads, head_dim, "qwen_attention_value_heads");
 
-    // Apply q/k RMSNorm and rotate positions before grouped-KV expansion.
+    // Normalize queries and keys per head, then apply RoPE so token position rotates each feature pair before
+    // attention sees the vectors.
     const auto normalized_query = ops::rms_norm(query_heads.view(), weights.q_norm_weight, norm_epsilon);
     const auto normalized_key = ops::rms_norm(key_heads.view(), weights.k_norm_weight, norm_epsilon);
     const auto rotated_query = apply_rope(normalized_query.view(), sequence_position_offset, rope_base);
     const auto rotated_key = apply_rope(normalized_key.view(), sequence_position_offset, rope_base);
+
+    // Qwen uses grouped KV heads, so duplicate each key/value head until keys and values match the query-head count
+    // [q_heads, seq, head_dim].
     const auto repeated_key = repeat_heads(rotated_key.view(), num_attention_heads, "qwen_attention_key_repeat");
     const auto repeated_value = repeat_heads(value_heads.view(), num_attention_heads, "qwen_attention_value_repeat");
 
-    // Attend each query head over the causal prefix, then pack heads back together.
+    // Causal attention mixes each query head over the visible prefix, merge_heads packs the result back to
+    // [seq, q_heads * head_dim], and the final output projection returns [seq, hidden].
     const auto attention_output =
         causal_self_attention(rotated_query.view(), repeated_key.view(), repeated_value.view());
     const auto merged_attention = merge_heads(attention_output.view(), "qwen_attention_merged_heads");

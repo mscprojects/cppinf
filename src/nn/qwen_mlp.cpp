@@ -79,11 +79,17 @@ void validate_qwen_mlp_inputs(const tensors::TensorView& hidden_states, const Qw
 tensors::Tensor qwen_mlp(const tensors::TensorView& hidden_states, const QwenMlpWeights& weights) {
     validate_qwen_mlp_inputs(hidden_states, weights);
 
-    // Projection ops preserve the public dtype and hide any required promotion internally.
+    // Two linear projections expand [seq, hidden] into [seq, intermediate]: one branch will become the gate, and the
+    // other carries the candidate values.
     const auto gate_projection = linear_project(hidden_states, weights.gate_proj_weight);
     const auto up_projection = linear_project(hidden_states, weights.up_proj_weight);
+
+    // SiLU turns the gate branch into smooth per-feature coefficients, and multiplying by the up branch keeps or
+    // suppresses each intermediate feature.
     const auto activated_gate = ops::silu(gate_projection.view());
     const auto gated_projection = ops::mul(activated_gate.view(), up_projection.view());
+
+    // The down projection maps the gated intermediate activations back to the model width [seq, hidden].
     return tensors::rename_tensor("qwen_mlp_result", linear_project(gated_projection.view(), weights.down_proj_weight));
 }
 
