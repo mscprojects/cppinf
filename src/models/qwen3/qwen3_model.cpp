@@ -161,10 +161,9 @@ tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) con
     auto hidden_states = embedding_lookup(weights_.tensor_view("model.embed_tokens.weight"), token_ids);
     for (std::size_t layer_index = 0; layer_index < config_.num_hidden_layers; ++layer_index) {
         const auto layer_weights = make_layer_weights(weights_, layer_index);
-        hidden_states =
-            nn::qwen_decoder_block(hidden_states.view(), layer_weights, config_.num_attention_heads,
-                                   config_.num_key_value_heads, config_.head_dim, config_.rms_norm_eps, 0,
-                                   config_.rope_theta);
+        hidden_states = nn::qwen_decoder_block(hidden_states.view(), layer_weights, config_.num_attention_heads,
+                                               config_.num_key_value_heads, config_.head_dim, config_.rms_norm_eps, 0,
+                                               config_.rope_theta);
     }
 
     const auto normalized_hidden_states =

@@ -9,12 +9,14 @@ Run with:
 import argparse
 
 import torch
+from safetensors.torch import save_file
 from transformers import AutoModelForCausalLM
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", required=True)
+    parser.add_argument("--output")
     return parser.parse_args()
 
 
@@ -44,3 +46,13 @@ if __name__ == "__main__":
     print(f"last_token_slice_0={last_token[:16].tolist()!r}")
     print(f"last_token_slice_1024={last_token[1024:1040].tolist()!r}")
     print(f"last_token_slice_tail={last_token[-16:].tolist()!r}")
+
+    if args.output:
+        save_file(
+            {"last_token_logits": logits[0, -1].to(torch.bfloat16).contiguous()},
+            args.output,
+            metadata={
+                "model_dir": args.model_dir,
+                "token_ids": ",".join(str(token_id) for token_id in token_ids),
+            },
+        )
