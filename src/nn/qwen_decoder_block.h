@@ -17,7 +17,7 @@ struct QwenDecoderBlockWeights {
 };
 
 // Applies one Qwen decoder block to rank-2 [sequence, hidden] hidden states.
-// Uses pre-norm residual paths, explicit head_dim, no cache, BF16 inputs compute in f32 and cast back at the end.
+// Uses pre-norm residual paths, explicit head_dim, no cache, and keeps the public tensor dtype across the block.
 tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, const QwenDecoderBlockWeights& weights,
                                    std::size_t num_attention_heads, std::size_t num_key_value_heads,
                                    std::size_t head_dim, float norm_epsilon, std::size_t sequence_position_offset = 0,

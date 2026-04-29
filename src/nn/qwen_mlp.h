@@ -12,7 +12,7 @@ struct QwenMlpWeights {
 };
 
 // Applies the bias-free Qwen MLP to rank-2 [sequence, hidden] hidden states.
-// gate and up project to the intermediate width, down projects back to hidden, BF16 inputs compute in f32.
+// Gate and up project to the intermediate width, down projects back to hidden, and the result keeps the input dtype.
 tensors::Tensor qwen_mlp(const tensors::TensorView& hidden_states, const QwenMlpWeights& weights);
 
 } // namespace cppinf::nn

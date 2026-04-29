@@ -3,7 +3,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -15,6 +14,8 @@
 
 #include "ops/matmul.h"
 #include "ops/nn_ops.h"
+#include "ops/one_dnn_utils.h"
+#include "ops/op_utils.h"
 #include "ops/tensor_ops.h"
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
@@ -45,40 +46,6 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     return value;
 }
 
-void validate_supported_float_dtype(tensors::DType dtype, std::string_view op_name) {
-    switch (dtype) {
-    case tensors::DType::BF16:
-    case tensors::DType::F32:
-        return;
-    case tensors::DType::F16:
-    case tensors::DType::I32:
-    case tensors::DType::I64:
-    case tensors::DType::U8:
-        throw std::invalid_argument(fmt::format("{} currently supports only f32 and bf16 tensors.", op_name));
-    }
-
-    throw std::invalid_argument(fmt::format("{} received an unsupported dtype.", op_name));
-}
-
-tensors::TensorView maybe_cast_to_f32(const tensors::TensorView& input, std::optional<tensors::Tensor>& storage) {
-    if (input.tensor_info().dtype == tensors::DType::F32) {
-        return input;
-    }
-
-    storage.emplace(cppinf::ops::cast(input, tensors::DType::F32));
-    return storage->view();
-}
-
-float load_f32(std::span<const std::byte> bytes, std::size_t index) {
-    float value = 0.0f;
-    std::memcpy(&value, bytes.data() + index * sizeof(float), sizeof(float));
-    return value;
-}
-
-void store_f32(std::span<std::byte> bytes, std::size_t index, float value) {
-    std::memcpy(bytes.data() + index * sizeof(float), &value, sizeof(float));
-}
-
 tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, float scale,
                                              std::size_t past_sequence_length) {
     if (scores.tensor_info().dtype != tensors::DType::F32 || scores.tensor_info().shape.rank() != 2) {
@@ -96,9 +63,13 @@ tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, 
         const auto last_allowed_key = past_sequence_length + query_index;
         for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
             const auto flat_index = query_index * key_sequence_length + key_index;
-            const auto value = key_index <= last_allowed_key ? load_f32(scores.data(), flat_index) * scale
-                                                             : -std::numeric_limits<float>::infinity();
-            store_f32(masked_scores.mutable_data(), flat_index, value);
+            const auto value =
+                key_index <= last_allowed_key
+                    ? cppinf::ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) *
+                          scale
+                    : -std::numeric_limits<float>::infinity();
+            cppinf::ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index,
+                                                   value);
         }
     }
 
@@ -110,14 +81,9 @@ void copy_head_output_to_result(const tensors::Tensor& head_output, std::size_t 
     std::memcpy(result.mutable_data().data() + byte_offset, head_output.data().data(), head_output.byte_size());
 }
 
-tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
-    return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
-                           std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
-}
-
 void validate_attention_inputs(const tensors::TensorView& query, const tensors::TensorView& key,
                                const tensors::TensorView& value, std::size_t past_sequence_length) {
-    validate_supported_float_dtype(query.tensor_info().dtype, "causal_self_attention");
+    cppinf::ops::detail::validate_supported_float_dtype(query.tensor_info().dtype, "causal_self_attention");
     if (query.tensor_info().dtype != key.tensor_info().dtype ||
         query.tensor_info().dtype != value.tensor_info().dtype) {
         throw std::invalid_argument("causal_self_attention requires matching tensor dtypes.");
@@ -177,9 +143,13 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
     std::optional<tensors::Tensor> query_storage;
     std::optional<tensors::Tensor> key_storage;
     std::optional<tensors::Tensor> value_storage;
-    const auto query_f32 = maybe_cast_to_f32(query, query_storage);
-    const auto key_f32 = maybe_cast_to_f32(key, key_storage);
-    const auto value_f32 = maybe_cast_to_f32(value, value_storage);
+    // Score construction stays in f32 so masking and softmax keep their stable reference behavior.
+    const auto query_f32 = cppinf::ops::detail::maybe_cast_to_dtype(query, tensors::DType::F32, query_storage,
+                                                                    "causal_self_attention_result");
+    const auto key_f32 =
+        cppinf::ops::detail::maybe_cast_to_dtype(key, tensors::DType::F32, key_storage, "causal_self_attention_result");
+    const auto value_f32 = cppinf::ops::detail::maybe_cast_to_dtype(value, tensors::DType::F32, value_storage,
+                                                                    "causal_self_attention_result");
 
     auto result_f32 =
         tensors::Tensor::zeros(make_result_info("causal_self_attention_result", tensors::DType::F32,
@@ -205,12 +175,8 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
         copy_head_output_to_result(head_output, head_index, result_f32);
     }
 
-    if (query.tensor_info().dtype == tensors::DType::F32) {
-        return result_f32;
-    }
-
-    return rename_tensor("causal_self_attention_result",
-                         cppinf::ops::cast(result_f32.view(), query.tensor_info().dtype));
+    return cppinf::ops::detail::maybe_cast_result(std::move(result_f32), query.tensor_info().dtype,
+                                                  "causal_self_attention_result");
 }
 
 } // namespace cppinf::nn

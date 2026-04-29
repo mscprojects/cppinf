@@ -1,7 +1,6 @@
 #include "nn/qwen_mlp.h"
 
 #include <cstddef>
-#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -12,6 +11,7 @@
 #include "ops/elementwise_ops.h"
 #include "ops/matmul.h"
 #include "ops/nn_ops.h"
+#include "ops/op_utils.h"
 #include "ops/tensor_ops.h"
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
@@ -42,30 +42,6 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     return value;
 }
 
-void validate_supported_float_dtype(tensors::DType dtype, std::string_view op_name) {
-    switch (dtype) {
-    case tensors::DType::BF16:
-    case tensors::DType::F32:
-        return;
-    case tensors::DType::F16:
-    case tensors::DType::I32:
-    case tensors::DType::I64:
-    case tensors::DType::U8:
-        throw std::invalid_argument(fmt::format("{} currently supports only f32 and bf16 tensors.", op_name));
-    }
-
-    throw std::invalid_argument(fmt::format("{} received an unsupported dtype.", op_name));
-}
-
-tensors::TensorView maybe_cast_to_f32(const tensors::TensorView& input, std::optional<tensors::Tensor>& storage) {
-    if (input.tensor_info().dtype == tensors::DType::F32) {
-        return input;
-    }
-
-    storage.emplace(cppinf::ops::cast(input, tensors::DType::F32));
-    return storage->view();
-}
-
 tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
     return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
                            std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
@@ -90,7 +66,7 @@ void validate_projection_weight(const tensors::TensorView& weight, std::string_v
 }
 
 void validate_qwen_mlp_inputs(const tensors::TensorView& hidden_states, const QwenMlpWeights& weights) {
-    validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_mlp");
+    cppinf::ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_mlp");
     const auto dtype = hidden_states.tensor_info().dtype;
     if (dtype != weights.gate_proj_weight.tensor_info().dtype || dtype != weights.up_proj_weight.tensor_info().dtype ||
         dtype != weights.down_proj_weight.tensor_info().dtype) {
@@ -116,27 +92,12 @@ void validate_qwen_mlp_inputs(const tensors::TensorView& hidden_states, const Qw
 tensors::Tensor qwen_mlp(const tensors::TensorView& hidden_states, const QwenMlpWeights& weights) {
     validate_qwen_mlp_inputs(hidden_states, weights);
 
-    std::optional<tensors::Tensor> hidden_states_storage;
-    std::optional<tensors::Tensor> gate_proj_weight_storage;
-    std::optional<tensors::Tensor> up_proj_weight_storage;
-    std::optional<tensors::Tensor> down_proj_weight_storage;
-
-    const auto hidden_states_f32 = maybe_cast_to_f32(hidden_states, hidden_states_storage);
-    const auto gate_proj_weight_f32 = maybe_cast_to_f32(weights.gate_proj_weight, gate_proj_weight_storage);
-    const auto up_proj_weight_f32 = maybe_cast_to_f32(weights.up_proj_weight, up_proj_weight_storage);
-    const auto down_proj_weight_f32 = maybe_cast_to_f32(weights.down_proj_weight, down_proj_weight_storage);
-
-    const auto gate_projection = linear_project(hidden_states_f32, gate_proj_weight_f32);
-    const auto up_projection = linear_project(hidden_states_f32, up_proj_weight_f32);
+    // Projection ops preserve the public dtype and hide any required promotion internally.
+    const auto gate_projection = linear_project(hidden_states, weights.gate_proj_weight);
+    const auto up_projection = linear_project(hidden_states, weights.up_proj_weight);
     const auto activated_gate = cppinf::ops::silu(gate_projection.view());
     const auto gated_projection = cppinf::ops::mul(activated_gate.view(), up_projection.view());
-    auto result_f32 = linear_project(gated_projection.view(), down_proj_weight_f32);
-
-    if (hidden_states.tensor_info().dtype == tensors::DType::F32) {
-        return rename_tensor("qwen_mlp_result", result_f32);
-    }
-
-    return rename_tensor("qwen_mlp_result", cppinf::ops::cast(result_f32.view(), hidden_states.tensor_info().dtype));
+    return rename_tensor("qwen_mlp_result", linear_project(gated_projection.view(), weights.down_proj_weight));
 }
 
 } // namespace cppinf::nn
