@@ -74,6 +74,20 @@ TEST_F(OpsTest, GivenCompatibleBatchedMatrices_WhenMultiplying_ThenBatchedMatmul
     EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
 }
 
+TEST_F(OpsTest, GivenCompatibleBatchedBf16Matrices_WhenMultiplyingToF32_ThenF32MatmulResultIsReturned) {
+    const auto lhs =
+        make_bf16_tensor("lhs", {2, 2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, -1.0f, 0.5f, 2.0f, 3.0f, -2.0f, 1.0f});
+    const auto rhs = make_bf16_tensor("rhs", {2, 3, 2},
+                                      {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f, 2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f});
+
+    const auto result = matmul(lhs.view(), rhs.view(), DType::F32);
+
+    EXPECT_EQ(std::string("matmul_result"), result.tensor_info().name);
+    EXPECT_EQ(DType::F32, result.tensor_info().dtype);
+    EXPECT_EQ(Shape({2, 2, 2}), result.tensor_info().shape);
+    expect_float_values_near(result.view(), {58.0f, 64.0f, 139.0f, 154.0f, -9.875f, 5.75f, 1.5f, -8.5f}, 0.0f);
+}
+
 TEST_F(OpsTest, GivenF32Tensor_WhenCastingToBf16_ThenExpectedBitsAreReturned) {
     const auto input = make_f32_tensor("input", {2, 2}, {1.5f, -2.25f, 0.5f, -0.75f});
     const auto expected = make_bf16_bits_tensor("cast_result", {2, 2}, {0x3fc0U, 0xc010U, 0x3f00U, 0xbf40U});
@@ -248,6 +262,13 @@ TEST_F(OpsTest, GivenMismatchedBatchDimensions_WhenMultiplying_ThenMatmulThrows)
                                       0.5f, 1.5f, -2.0f, 0.25f, 3.0f, -0.5f});
 
     EXPECT_THROW(matmul(lhs.view(), rhs.view()), std::invalid_argument);
+}
+
+TEST_F(OpsTest, GivenF32InputsAndBf16OutputRequest_WhenMultiplying_ThenMatmulThrows) {
+    const auto lhs = make_f32_tensor("lhs", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    const auto rhs = make_f32_tensor("rhs", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+
+    EXPECT_THROW(matmul(lhs.view(), rhs.view(), DType::BF16), std::invalid_argument);
 }
 
 } // namespace cppinf::tests
