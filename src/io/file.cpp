@@ -34,6 +34,7 @@ std::vector<std::byte> read_binary_file(const std::filesystem::path& path, std::
     if (file_size < 0) {
         throw std::invalid_argument(fmt::format("Failed to read {} '{}'.", file_kind, path.string()));
     }
+
     if (static_cast<std::uint64_t>(file_size) > std::numeric_limits<std::size_t>::max()) {
         throw std::overflow_error(fmt::format("{} '{}' is too large to load into memory.", file_kind, path.string()));
     }

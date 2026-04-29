@@ -12,6 +12,7 @@ Tensor::Tensor(TensorInfo tensor_info, std::vector<std::byte> data)
     if (tensor_info_.byte_offset != 0) {
         throw std::invalid_argument("Owning Tensor byte offset must be zero.");
     }
+
     if (data_.size() != tensor_info_.byte_size()) {
         throw std::invalid_argument("Tensor byte size does not match TensorInfo.");
     }

@@ -99,6 +99,7 @@ void stream_generated_text(const OutputWriter& output_writer, std::string_view p
     if (!output_writer || current_text.size() <= previous_text.size()) {
         return;
     }
+
     if (!current_text.starts_with(previous_text)) {
         return;
     }

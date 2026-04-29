@@ -37,6 +37,7 @@ void validate_norm_weight(const tensors::TensorView& weight, std::string_view na
     if (weight.tensor_info().shape.rank() != 1) {
         throw std::invalid_argument(fmt::format("{} must be rank-1.", name));
     }
+
     if (checked_positive_dim_to_size(weight.tensor_info().shape.dims()[0], fmt::format("{} size", name)) !=
         hidden_size) {
         throw std::invalid_argument(fmt::format("{} must match hidden size.", name));
@@ -51,9 +52,11 @@ void validate_qwen_decoder_block_inputs(const tensors::TensorView& hidden_states
     if (!std::isfinite(norm_epsilon) || norm_epsilon < 0.0f) {
         throw std::invalid_argument("qwen_decoder_block requires a non-negative finite norm epsilon.");
     }
+
     if (!std::isfinite(rope_base) || rope_base <= 0.0f) {
         throw std::invalid_argument("qwen_decoder_block requires a positive finite rope base.");
     }
+
     if (hidden_states.tensor_info().shape.rank() != 2) {
         throw std::invalid_argument("qwen_decoder_block requires rank-2 hidden states.");
     }

@@ -154,6 +154,7 @@ void validate_norm_weight(const tensors::TensorView& weight, std::string_view na
     if (weight.tensor_info().shape.rank() != 1) {
         throw std::invalid_argument(fmt::format("{} must be rank-1.", name));
     }
+
     if (checked_positive_dim_to_size(weight.tensor_info().shape.dims()[0], fmt::format("{} size", name)) != head_dim) {
         throw std::invalid_argument(fmt::format("{} must have size head_dim.", name));
     }
@@ -165,12 +166,15 @@ void validate_qwen_attention_inputs(const tensors::TensorView& hidden_states, co
     if (num_attention_heads == 0 || num_key_value_heads == 0 || head_dim == 0) {
         throw std::invalid_argument("qwen_attention requires non-zero head counts and head_dim.");
     }
+
     if (num_attention_heads % num_key_value_heads != 0) {
         throw std::invalid_argument("qwen_attention requires num_attention_heads to divide by num_key_value_heads.");
     }
+
     if (!std::isfinite(norm_epsilon) || norm_epsilon < 0.0f) {
         throw std::invalid_argument("qwen_attention requires a non-negative finite norm epsilon.");
     }
+
     if (!std::isfinite(rope_base) || rope_base <= 0.0f) {
         throw std::invalid_argument("qwen_attention requires a positive finite rope base.");
     }

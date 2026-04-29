@@ -107,6 +107,7 @@ tensors::TensorView narrow(const tensors::TensorView& input, std::size_t dim, st
     if (input.tensor_info().shape.rank() == 0) {
         throw std::invalid_argument("narrow requires a tensor with rank at least 1.");
     }
+
     if (dim != 0) {
         throw std::invalid_argument("narrow currently supports only dim=0 for contiguous slices.");
     }

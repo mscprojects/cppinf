@@ -30,6 +30,7 @@ std::size_t read_size(const json& value, std::string_view field_name) {
     if (parsed_value < 0) {
         throw std::invalid_argument(fmt::format("HF config field '{}' must be non-negative.", field_name));
     }
+
     if (static_cast<std::uint64_t>(parsed_value) > std::numeric_limits<std::size_t>::max()) {
         throw std::overflow_error(fmt::format("HF config field '{}' does not fit in size_t.", field_name));
     }
@@ -83,18 +84,23 @@ tensors::DType parse_torch_dtype(std::string_view torch_dtype) {
     if (torch_dtype == "float16") {
         return tensors::DType::F16;
     }
+
     if (torch_dtype == "bfloat16") {
         return tensors::DType::BF16;
     }
+
     if (torch_dtype == "float32") {
         return tensors::DType::F32;
     }
+
     if (torch_dtype == "int32") {
         return tensors::DType::I32;
     }
+
     if (torch_dtype == "int64") {
         return tensors::DType::I64;
     }
+
     if (torch_dtype == "uint8") {
         return tensors::DType::U8;
     }

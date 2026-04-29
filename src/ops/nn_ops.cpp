@@ -36,6 +36,7 @@ void validate_last_dim_operation_input(const tensors::TensorView& input, std::st
     if (input.tensor_info().shape.rank() == 0) {
         throw std::invalid_argument(fmt::format("{} requires a tensor with rank at least 1.", op_name));
     }
+
     if (checked_dim_to_size(input.tensor_info().shape.dims().back(), fmt::format("{} last dim", op_name)) == 0) {
         throw std::invalid_argument(fmt::format("{} requires a non-empty last dimension.", op_name));
     }
@@ -82,9 +83,11 @@ tensors::Tensor rms_norm(const tensors::TensorView& input, const tensors::Tensor
     if (epsilon < 0.0f) {
         throw std::invalid_argument("rms_norm requires a non-negative epsilon.");
     }
+
     if (input.tensor_info().dtype != weight.tensor_info().dtype) {
         throw std::invalid_argument("rms_norm requires matching tensor dtypes.");
     }
+
     if (weight.tensor_info().shape.rank() != 1) {
         throw std::invalid_argument("rms_norm requires a rank-1 weight tensor.");
     }

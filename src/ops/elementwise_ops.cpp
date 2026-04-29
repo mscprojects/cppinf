@@ -16,6 +16,7 @@ void validate_elementwise_inputs(const tensors::TensorView& lhs, const tensors::
     if (lhs.tensor_info().dtype != rhs.tensor_info().dtype) {
         throw std::invalid_argument(fmt::format("{} requires matching tensor dtypes.", op_name));
     }
+
     if (lhs.tensor_info().shape != rhs.tensor_info().shape) {
         throw std::invalid_argument(fmt::format("{} requires matching tensor shapes.", op_name));
     }
