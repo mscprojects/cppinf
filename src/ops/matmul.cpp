@@ -73,9 +73,11 @@ tensors::Shape make_matmul_result_shape(const tensors::TensorView& lhs, const te
 
 bool supports_native_matmul_input_dtypes(tensors::DType lhs_dtype, tensors::DType rhs_dtype,
                                          tensors::DType output_dtype) {
-    return output_dtype == tensors::DType::F32 &&
-           ((lhs_dtype == tensors::DType::BF16 && rhs_dtype == tensors::DType::BF16) ||
-            (lhs_dtype == tensors::DType::F32 && rhs_dtype == tensors::DType::BF16));
+    if (lhs_dtype == tensors::DType::BF16 && rhs_dtype == tensors::DType::BF16) {
+        return output_dtype == tensors::DType::BF16 || output_dtype == tensors::DType::F32;
+    }
+
+    return lhs_dtype == tensors::DType::F32 && rhs_dtype == tensors::DType::BF16 && output_dtype == tensors::DType::F32;
 }
 
 } // namespace
@@ -84,7 +86,7 @@ tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView
     const auto output_dtype = resolve_output_dtype(lhs, rhs, options);
     validate_matmul_inputs(lhs, rhs, output_dtype);
 
-    const auto compute_dtype = output_dtype == tensors::DType::BF16 ? tensors::DType::F32 : output_dtype;
+    const auto compute_dtype = output_dtype;
     const bool can_keep_input_dtypes =
         supports_native_matmul_input_dtypes(lhs.tensor_info().dtype, rhs.tensor_info().dtype, output_dtype);
 

@@ -70,9 +70,6 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
     const auto head_size = static_cast<std::size_t>(dims[2]);
     const auto half_head_size = head_size / 2;
 
-    std::optional<tensors::Tensor> input_storage;
-    const auto input_f32 = ops::detail::maybe_cast_to_dtype(input, tensors::DType::F32, input_storage, "rope_result");
-
     // Build one inverse frequency per feature pair so lower-index pairs rotate slowly and higher-index pairs rotate
     // faster.
     std::vector<float> inverse_frequencies;
@@ -100,9 +97,9 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
                     flat_index(head_index, sequence_index, pair_index + half_head_size, sequence_length, head_size);
 
                 const auto first_value =
-                    ops::detail::load_float_value(input_f32.tensor_info().dtype, input_f32.data(), first_index);
+                    ops::detail::load_float_value(input.tensor_info().dtype, input.data(), first_index);
                 const auto second_value =
-                    ops::detail::load_float_value(input_f32.tensor_info().dtype, input_f32.data(), second_index);
+                    ops::detail::load_float_value(input.tensor_info().dtype, input.data(), second_index);
 
                 ops::detail::store_float_value(tensors::DType::F32, result_f32.mutable_data(), first_index,
                                                first_value * cosine - second_value * sine);
