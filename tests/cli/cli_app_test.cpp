@@ -1,6 +1,5 @@
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -13,6 +12,7 @@
 
 #include "cli/cli_app.h"
 #include "test_file_utils.h"
+#include "test_safetensors_utils.h"
 #include "test_temp_dir.h"
 
 namespace cppinf::tests {
@@ -20,6 +20,7 @@ namespace cppinf::tests {
 using cli::CliResult;
 using cli::run;
 using cli::run_with_output_writer;
+using safetensors_test_utils::append_f32_tensor;
 
 class CliAppTest : public ::testing::Test {
   protected:
@@ -196,37 +197,6 @@ class CliAppTest : public ::testing::Test {
 
         write_binary_file("model.safetensors",
                           file_test_utils::make_safetensors_file_bytes(header.dump(), tensor_data));
-    }
-
-    std::size_t num_elements(std::span<const std::int64_t> shape) const {
-        std::size_t elements = 1;
-        for (const auto dim : shape) {
-            if (dim < 0) {
-                throw std::invalid_argument("Tensor shape dimensions must be non-negative.");
-            }
-            elements *= static_cast<std::size_t>(dim);
-        }
-        return elements;
-    }
-
-    void append_f32_tensor(ordered_json& header, std::vector<std::byte>& tensor_data, std::string_view name,
-                           std::vector<std::int64_t> shape, std::initializer_list<float> values) {
-        if (values.size() != num_elements(shape)) {
-            throw std::invalid_argument("Tensor values do not match the requested shape.");
-        }
-
-        const auto begin = tensor_data.size();
-        for (const float value : values) {
-            const auto* raw = reinterpret_cast<const std::byte*>(&value);
-            tensor_data.insert(tensor_data.end(), raw, raw + sizeof(float));
-        }
-        const auto end = tensor_data.size();
-
-        header[std::string(name)] = ordered_json{
-            {"dtype", "F32"},
-            {"shape", std::move(shape)},
-            {"data_offsets", {begin, end}},
-        };
     }
 
     TestTempDir temp_dir_{"cppinf-cli-app-test"};

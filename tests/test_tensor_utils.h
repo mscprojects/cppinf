@@ -2,10 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <initializer_list>
 #include <span>
-#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -15,30 +13,14 @@
 #include "tensors/shape.h"
 #include "tensors/tensor.h"
 #include "tensors/tensor_info.h"
+#include "tensors/tensor_utils.h"
 #include "tensors/tensor_view.h"
 
 namespace cppinf::tests::tensor_test_utils {
 namespace detail {
 
-inline tensors::Tensor make_float_tensor(std::string_view name, tensors::DType dtype,
-                                         std::initializer_list<std::int64_t> dims, std::span<const float> values) {
-    ops::detail::validate_supported_float_dtype(dtype, "make_float_tensor");
-
-    std::vector<std::byte> bytes(values.size() * tensors::element_size_bytes(dtype));
-    std::size_t index = 0;
-    for (const float value : values) {
-        ops::detail::store_float_value(dtype, bytes, index, value);
-        ++index;
-    }
-
-    return tensors::Tensor(
-        tensors::TensorInfo{
-            .name = std::string(name),
-            .dtype = dtype,
-            .shape = tensors::Shape(std::vector<std::int64_t>(dims)),
-            .byte_offset = 0,
-        },
-        std::move(bytes));
+inline tensors::Shape make_shape(std::initializer_list<std::int64_t> dims) {
+    return tensors::Shape(std::vector<std::int64_t>(dims));
 }
 
 } // namespace detail
@@ -46,14 +28,14 @@ inline tensors::Tensor make_float_tensor(std::string_view name, tensors::DType d
 // Creates an owned f32 tensor from literal float values.
 inline tensors::Tensor make_f32_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
                                        std::initializer_list<float> values) {
-    return detail::make_float_tensor(name, tensors::DType::F32, dims,
-                                     std::span<const float>(values.begin(), values.size()));
+    return tensors::make_f32_tensor(name, detail::make_shape(dims),
+                                    std::span<const float>(values.begin(), values.size()));
 }
 
 // Creates an owned bf16 tensor from literal float values.
 inline tensors::Tensor make_bf16_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
                                         std::initializer_list<float> values) {
-    return detail::make_float_tensor(name, tensors::DType::BF16, dims,
+    return tensors::make_bf16_tensor(name, detail::make_shape(dims),
                                      std::span<const float>(values.begin(), values.size()));
 }
 
@@ -66,28 +48,15 @@ inline tensors::Tensor make_f32_filled_tensor(std::string_view name, std::initia
     }
 
     std::vector<float> values(element_count, value);
-    return detail::make_float_tensor(name, tensors::DType::F32, dims,
-                                     std::span<const float>(values.data(), values.size()));
+    return tensors::make_f32_tensor(name, detail::make_shape(dims),
+                                    std::span<const float>(values.data(), values.size()));
 }
 
 // Creates an owned bf16 tensor from already-quantized bf16 bit patterns.
 inline tensors::Tensor make_bf16_bits_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
                                              std::initializer_list<std::uint16_t> values) {
-    std::vector<std::byte> bytes(values.size() * sizeof(std::uint16_t));
-    std::size_t index = 0;
-    for (const std::uint16_t value : values) {
-        std::memcpy(bytes.data() + index * sizeof(std::uint16_t), &value, sizeof(std::uint16_t));
-        ++index;
-    }
-
-    return tensors::Tensor(
-        tensors::TensorInfo{
-            .name = std::string(name),
-            .dtype = tensors::DType::BF16,
-            .shape = tensors::Shape(std::vector<std::int64_t>(dims)),
-            .byte_offset = 0,
-        },
-        std::move(bytes));
+    return tensors::make_bf16_bits_tensor(name, detail::make_shape(dims),
+                                          std::span<const std::uint16_t>(values.begin(), values.size()));
 }
 
 // Reads f32 or bf16 tensor values back as float literals for assertions.
