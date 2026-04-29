@@ -18,11 +18,13 @@
 #include "tensors/dtype.h"
 #include "tensors/tensor.h"
 #include "tensors/tensor_view.h"
+#include "test_tensor_utils.h"
 
 namespace cppinf::tests {
 
 using files::SafetensorsFile;
 using models::qwen3::Qwen3Model;
+using tensor_test_utils::read_float_values;
 using tensors::bfloat16_bits_to_float;
 using tensors::DType;
 using tensors::element_size_bytes;
@@ -39,37 +41,6 @@ class Qwen3RealModelTest : public ::testing::Test {
 
     const char* real_model_dir_env() const {
         return std::getenv("CPPINF_QWEN3_REAL_MODEL_DIR");
-    }
-
-    std::vector<float> read_float_values(const TensorView& tensor_view) const {
-        std::vector<float> values;
-        values.reserve(tensor_view.tensor_info().shape.num_elements());
-
-        switch (tensor_view.tensor_info().dtype) {
-        case DType::BF16: {
-            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
-                std::uint16_t bits = 0;
-                std::memcpy(&bits, tensor_view.data().data() + index * sizeof(std::uint16_t), sizeof(bits));
-                values.push_back(bfloat16_bits_to_float(bits));
-            }
-            return values;
-        }
-        case DType::F32: {
-            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
-                float value = 0.0f;
-                std::memcpy(&value, tensor_view.data().data() + index * sizeof(float), sizeof(value));
-                values.push_back(value);
-            }
-            return values;
-        }
-        case DType::F16:
-        case DType::I32:
-        case DType::I64:
-        case DType::U8:
-            throw std::invalid_argument("read_float_values supports only bf16 and f32 tensors.");
-        }
-
-        throw std::invalid_argument("read_float_values received an unsupported tensor dtype.");
     }
 
     std::vector<float> read_last_token_values(const Tensor& tensor) const {

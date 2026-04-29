@@ -17,18 +17,10 @@
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
 #include "tensors/tensor_info.h"
+#include "tensors/tensor_utils.h"
 
 namespace cppinf::nn {
 namespace {
-
-tensors::TensorInfo make_result_info(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
-    return tensors::TensorInfo{
-        .name = std::string(name),
-        .dtype = dtype,
-        .shape = shape,
-        .byte_offset = 0,
-    };
-}
 
 std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
     if (dim < 0) {
@@ -88,8 +80,8 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
     }
 
     // RoPE computes angles in f32, then returns to the caller's dtype at the helper boundary.
-    auto result_f32 =
-        tensors::Tensor::zeros(make_result_info("rope_result", tensors::DType::F32, input.tensor_info().shape));
+    auto result_f32 = tensors::Tensor::zeros(
+        tensors::make_result_tensor_info("rope_result", tensors::DType::F32, input.tensor_info().shape));
 
     for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
         for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {

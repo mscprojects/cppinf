@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "cli/cli_app.h"
+#include "test_file_utils.h"
 #include "test_temp_dir.h"
 
 namespace cppinf::tests {
@@ -23,13 +24,11 @@ using cli::run_with_output_writer;
 class CliAppTest : public ::testing::Test {
   protected:
     void write_text_file(std::string_view file_name, std::string_view text) {
-        std::ofstream output(temp_dir_.path() / file_name);
-        output << text;
+        file_test_utils::write_text_file(temp_dir_.path() / file_name, text);
     }
 
     void write_binary_file(std::string_view file_name, std::span<const std::byte> bytes) {
-        std::ofstream output(temp_dir_.path() / file_name, std::ios::binary);
-        output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        file_test_utils::write_binary_file(temp_dir_.path() / file_name, bytes);
     }
 
     void write_inspect_fixture_files() {
@@ -62,7 +61,7 @@ class CliAppTest : public ::testing::Test {
         };
         const std::string header =
             R"({"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"token_ids":{"dtype":"U8","shape":[4],"data_offsets":[16,20]}})";
-        write_binary_file("model.safetensors", make_safetensors_file_bytes(header, tensor_data));
+        write_binary_file("model.safetensors", file_test_utils::make_safetensors_file_bytes(header, tensor_data));
     }
 
     void write_tiny_generation_model_dir() {
@@ -195,20 +194,8 @@ class CliAppTest : public ::testing::Test {
         append_f32_tensor(header, tensor_data, "model.layers.0.mlp.down_proj.weight", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
         append_f32_tensor(header, tensor_data, "model.norm.weight", {2}, {1.0f, 1.0f});
 
-        write_binary_file("model.safetensors", make_safetensors_file_bytes(header.dump(), tensor_data));
-    }
-
-    std::vector<std::byte> make_safetensors_file_bytes(std::string_view header_json,
-                                                       std::span<const std::byte> tensor_data) const {
-        std::vector<std::byte> bytes;
-        append_u64_le(static_cast<std::uint64_t>(header_json.size()), bytes);
-
-        for (const char character : header_json) {
-            bytes.push_back(static_cast<std::byte>(character));
-        }
-
-        bytes.insert(bytes.end(), tensor_data.begin(), tensor_data.end());
-        return bytes;
+        write_binary_file("model.safetensors",
+                          file_test_utils::make_safetensors_file_bytes(header.dump(), tensor_data));
     }
 
     std::size_t num_elements(std::span<const std::int64_t> shape) const {
@@ -240,12 +227,6 @@ class CliAppTest : public ::testing::Test {
             {"shape", std::move(shape)},
             {"data_offsets", {begin, end}},
         };
-    }
-
-    void append_u64_le(std::uint64_t value, std::vector<std::byte>& bytes) const {
-        for (std::size_t index = 0; index < sizeof(std::uint64_t); ++index) {
-            bytes.push_back(static_cast<std::byte>((value >> (index * 8)) & 0xffU));
-        }
     }
 
     TestTempDir temp_dir_{"cppinf-cli-app-test"};

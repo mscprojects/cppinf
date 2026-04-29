@@ -15,18 +15,10 @@
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
 #include "tensors/tensor_info.h"
+#include "tensors/tensor_utils.h"
 
 namespace cppinf::nn {
 namespace {
-
-tensors::TensorInfo make_result_info(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
-    return tensors::TensorInfo{
-        .name = std::string(name),
-        .dtype = dtype,
-        .shape = shape,
-        .byte_offset = 0,
-    };
-}
 
 std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
     if (dim < 0) {
@@ -39,11 +31,6 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     }
 
     return value;
-}
-
-tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
-    return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
-                           std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
 }
 
 void validate_norm_weight(const tensors::TensorView& weight, std::string_view name, std::size_t hidden_size) {
@@ -107,7 +94,7 @@ tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, con
     const auto mlp_input =
         ops::rms_norm(attention_residual.view(), weights.post_attention_layernorm_weight, norm_epsilon);
     const auto mlp_output = qwen_mlp(mlp_input.view(), weights.mlp);
-    return rename_tensor("qwen_decoder_block_result", ops::add(attention_residual.view(), mlp_output.view()));
+    return tensors::rename_tensor("qwen_decoder_block_result", ops::add(attention_residual.view(), mlp_output.view()));
 }
 
 } // namespace cppinf::nn

@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "test_file_utils.h"
 #include "test_temp_dir.h"
 #include "tokenizers/hf/hf_tokenizer.h"
 
@@ -17,8 +18,7 @@ using tokenizers::hf::HfTokenizer;
 class HfTokenizerTest : public ::testing::Test {
   protected:
     void write_text_file(std::string_view file_name, std::string_view contents) {
-        std::ofstream output(temp_dir_.path() / file_name);
-        output << contents;
+        file_test_utils::write_text_file(temp_dir_.path() / file_name, contents);
     }
 
     void write_tiny_tokenizer_files() {

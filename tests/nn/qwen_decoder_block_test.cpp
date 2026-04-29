@@ -9,8 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "nn/qwen_decoder_block.h"
-#include "tensors/bfloat16.h"
-#include "tensors/tensor.h"
+#include "test_tensor_utils.h"
 
 namespace cppinf::tests {
 
@@ -18,113 +17,14 @@ using nn::qwen_decoder_block;
 using nn::QwenAttentionWeights;
 using nn::QwenDecoderBlockWeights;
 using nn::QwenMlpWeights;
-using tensors::bfloat16_bits_to_float;
+using tensor_test_utils::expect_float_values_near;
+using tensor_test_utils::make_bf16_tensor;
+using tensor_test_utils::make_f32_filled_tensor;
+using tensor_test_utils::make_f32_tensor;
 using tensors::DType;
-using tensors::float_to_bfloat16_bits;
 using tensors::Shape;
-using tensors::Tensor;
-using tensors::TensorInfo;
-using tensors::TensorView;
 
-class QwenDecoderBlockTest : public ::testing::Test {
-  protected:
-    Tensor make_f32_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
-                           std::initializer_list<float> values) const {
-        std::vector<std::byte> bytes(values.size() * sizeof(float));
-        std::size_t index = 0;
-        for (const auto value : values) {
-            std::memcpy(bytes.data() + index * sizeof(float), &value, sizeof(float));
-            ++index;
-        }
-
-        return Tensor(
-            TensorInfo{
-                .name = std::string(name),
-                .dtype = DType::F32,
-                .shape = Shape(std::vector<std::int64_t>(dims)),
-                .byte_offset = 0,
-            },
-            std::move(bytes));
-    }
-
-    Tensor make_bf16_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
-                            std::initializer_list<float> values) const {
-        std::vector<std::byte> bytes(values.size() * sizeof(std::uint16_t));
-        std::size_t index = 0;
-        for (const auto value : values) {
-            const auto bits = float_to_bfloat16_bits(value);
-            std::memcpy(bytes.data() + index * sizeof(std::uint16_t), &bits, sizeof(std::uint16_t));
-            ++index;
-        }
-
-        return Tensor(
-            TensorInfo{
-                .name = std::string(name),
-                .dtype = DType::BF16,
-                .shape = Shape(std::vector<std::int64_t>(dims)),
-                .byte_offset = 0,
-            },
-            std::move(bytes));
-    }
-
-    Tensor make_f32_filled_tensor(std::string_view name, std::initializer_list<std::int64_t> dims, float value) const {
-        std::size_t element_count = 1;
-        for (const auto dim : dims) {
-            element_count *= static_cast<std::size_t>(dim);
-        }
-
-        std::vector<std::byte> bytes(element_count * sizeof(float));
-        for (std::size_t index = 0; index < element_count; ++index) {
-            std::memcpy(bytes.data() + index * sizeof(float), &value, sizeof(float));
-        }
-
-        return Tensor(
-            TensorInfo{
-                .name = std::string(name),
-                .dtype = DType::F32,
-                .shape = Shape(std::vector<std::int64_t>(dims)),
-                .byte_offset = 0,
-            },
-            std::move(bytes));
-    }
-
-    std::vector<float> read_float_values(const TensorView& tensor_view) const {
-        std::vector<float> values;
-        values.reserve(tensor_view.tensor_info().shape.num_elements());
-
-        if (tensor_view.tensor_info().dtype == DType::F32) {
-            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
-                float value = 0.0f;
-                std::memcpy(&value, tensor_view.data().data() + index * sizeof(float), sizeof(float));
-                values.push_back(value);
-            }
-            return values;
-        }
-
-        if (tensor_view.tensor_info().dtype == DType::BF16) {
-            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
-                std::uint16_t bits = 0;
-                std::memcpy(&bits, tensor_view.data().data() + index * sizeof(std::uint16_t), sizeof(std::uint16_t));
-                values.push_back(bfloat16_bits_to_float(bits));
-            }
-            return values;
-        }
-
-        throw std::invalid_argument("read_float_values supports only f32 and bf16 tensors.");
-    }
-
-    void expect_float_values_near(const TensorView& tensor_view, std::initializer_list<float> expected,
-                                  float tolerance) const {
-        const auto actual_values = read_float_values(tensor_view);
-        ASSERT_EQ(expected.size(), actual_values.size());
-
-        std::size_t index = 0;
-        for (const auto expected_value : expected) {
-            EXPECT_NEAR(expected_value, actual_values[index], tolerance) << "index=" << index;
-            ++index;
-        }
-    }
-};
+class QwenDecoderBlockTest : public ::testing::Test {};
 
 TEST_F(QwenDecoderBlockTest, GivenTorchOracleF32Inputs_WhenApplyingQwenDecoderBlock_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_decoder_block_oracle.py.

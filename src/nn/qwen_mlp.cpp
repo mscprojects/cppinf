@@ -16,18 +16,10 @@
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
 #include "tensors/tensor_info.h"
+#include "tensors/tensor_utils.h"
 
 namespace cppinf::nn {
 namespace {
-
-tensors::TensorInfo make_result_info(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
-    return tensors::TensorInfo{
-        .name = std::string(name),
-        .dtype = dtype,
-        .shape = shape,
-        .byte_offset = 0,
-    };
-}
 
 std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
     if (dim < 0) {
@@ -40,11 +32,6 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     }
 
     return value;
-}
-
-tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tensor) {
-    return tensors::Tensor(make_result_info(name, tensor.tensor_info().dtype, tensor.tensor_info().shape),
-                           std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
 }
 
 tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight) {
@@ -97,7 +84,7 @@ tensors::Tensor qwen_mlp(const tensors::TensorView& hidden_states, const QwenMlp
     const auto up_projection = linear_project(hidden_states, weights.up_proj_weight);
     const auto activated_gate = ops::silu(gate_projection.view());
     const auto gated_projection = ops::mul(activated_gate.view(), up_projection.view());
-    return rename_tensor("qwen_mlp_result", linear_project(gated_projection.view(), weights.down_proj_weight));
+    return tensors::rename_tensor("qwen_mlp_result", linear_project(gated_projection.view(), weights.down_proj_weight));
 }
 
 } // namespace cppinf::nn

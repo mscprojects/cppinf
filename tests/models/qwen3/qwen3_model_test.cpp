@@ -15,11 +15,14 @@
 #include "models/qwen3/qwen3_model.h"
 #include "tensors/bfloat16.h"
 #include "tensors/tensor.h"
+#include "test_file_utils.h"
 #include "test_temp_dir.h"
+#include "test_tensor_utils.h"
 
 namespace cppinf::tests {
 
 using models::qwen3::Qwen3Model;
+using tensor_test_utils::expect_float_values_near;
 using tensors::bfloat16_bits_to_float;
 using tensors::DType;
 using tensors::float_to_bfloat16_bits;
@@ -33,28 +36,6 @@ class Qwen3ModelTest : public ::testing::Test {
         write_text_file("tokenizer.json", R"({"version":"1.0"})");
         write_text_file("tokenizer_config.json", R"({"tokenizer_class":"Qwen2Tokenizer"})");
         write_weights_file();
-    }
-
-    std::vector<float> read_bf16_values(const Tensor& tensor) const {
-        std::vector<float> values;
-        values.reserve(tensor.tensor_info().shape.num_elements());
-        for (std::size_t index = 0; index < tensor.tensor_info().shape.num_elements(); ++index) {
-            std::uint16_t bits = 0;
-            std::memcpy(&bits, tensor.bytes().data() + index * sizeof(std::uint16_t), sizeof(std::uint16_t));
-            values.push_back(bfloat16_bits_to_float(bits));
-        }
-        return values;
-    }
-
-    void expect_bf16_values_near(const Tensor& tensor, std::initializer_list<float> expected, float tolerance) const {
-        const auto actual_values = read_bf16_values(tensor);
-        ASSERT_EQ(expected.size(), actual_values.size());
-
-        std::size_t index = 0;
-        for (const auto expected_value : expected) {
-            EXPECT_NEAR(expected_value, actual_values[index], tolerance) << "index=" << index;
-            ++index;
-        }
     }
 
     const std::filesystem::path& model_dir() const {
@@ -286,7 +267,7 @@ class Qwen3ModelTest : public ::testing::Test {
                            {0.80078125f, 1.0625f, 0.7890625f, 1.0390625f, 1.4296875f, 0.8984375f});
 
         const auto header_text = header.dump();
-        write_binary_file("model.safetensors", make_safetensors_file_bytes(header_text, tensor_data));
+        write_binary_file("model.safetensors", file_test_utils::make_safetensors_file_bytes(header_text, tensor_data));
     }
 
     void append_bf16_vector(ordered_json& header, std::vector<std::byte>& tensor_data, std::string_view name,
@@ -336,31 +317,12 @@ class Qwen3ModelTest : public ::testing::Test {
         };
     }
 
-    std::vector<std::byte> make_safetensors_file_bytes(std::string_view header_json,
-                                                       std::span<const std::byte> tensor_data) const {
-        std::vector<std::byte> bytes;
-        append_u64_le(static_cast<std::uint64_t>(header_json.size()), bytes);
-        for (const auto character : header_json) {
-            bytes.push_back(static_cast<std::byte>(character));
-        }
-        bytes.insert(bytes.end(), tensor_data.begin(), tensor_data.end());
-        return bytes;
-    }
-
-    void append_u64_le(std::uint64_t value, std::vector<std::byte>& bytes) const {
-        for (std::size_t index = 0; index < sizeof(std::uint64_t); ++index) {
-            bytes.push_back(static_cast<std::byte>((value >> (index * 8)) & 0xffU));
-        }
-    }
-
     void write_text_file(std::string_view file_name, std::string_view contents) const {
-        std::ofstream output(temp_dir_.path() / file_name);
-        output << contents;
+        file_test_utils::write_text_file(temp_dir_.path() / file_name, contents);
     }
 
     void write_binary_file(std::string_view file_name, std::span<const std::byte> bytes) const {
-        std::ofstream output(temp_dir_.path() / file_name, std::ios::binary);
-        output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        file_test_utils::write_binary_file(temp_dir_.path() / file_name, bytes);
     }
 
     TestTempDir temp_dir_{"cppinf-qwen3-model-test"};
@@ -380,17 +342,17 @@ TEST_F(Qwen3ModelTest, GivenTinyBf16Checkpoint_WhenRunningForward_ThenExpectedLo
     EXPECT_EQ(std::size_t{2}, model.config().num_hidden_layers);
     EXPECT_EQ(DType::BF16, logits.tensor_info().dtype);
     EXPECT_EQ(Shape({4, 13}), logits.tensor_info().shape);
-    expect_bf16_values_near(logits,
-                            {0.3046875f,  0.12353515625f,  0.287109375f,  1.4921875f,  4.28125f,    -0.0245361328125f,
-                             -1.609375f,  -1.421875f,      0.96484375f,   1.203125f,   -2.515625f,  0.84375f,
-                             -2.828125f,  1.484375f,       -0.205078125f, -0.578125f,  1.203125f,   4.71875f,
-                             0.83203125f, -2.796875f,      -1.65625f,     0.69140625f, 1.453125f,   -2.4375f,
-                             0.24609375f, -2.765625f,      1.65625f,      1.6171875f,  -0.84375f,   3.171875f,
-                             4.5625f,     2.390625f,       -2.34375f,     -1.9453125f, 1.796875f,   1.078125f,
-                             -2.203125f,  -0.08837890625f, -3.671875f,    -1.6328125f, -1.03125f,   0.65234375f,
-                             -2.046875f,  0.65625f,        -1.3046875f,   0.73046875f, 0.60546875f, -0.3125f,
-                             2.296875f,   -1.7578125f,     -0.30078125f,  0.5234375f},
-                            1e-6f);
+    expect_float_values_near(logits.view(),
+                             {0.3046875f,  0.12353515625f,  0.287109375f,  1.4921875f,  4.28125f,    -0.0245361328125f,
+                              -1.609375f,  -1.421875f,      0.96484375f,   1.203125f,   -2.515625f,  0.84375f,
+                              -2.828125f,  1.484375f,       -0.205078125f, -0.578125f,  1.203125f,   4.71875f,
+                              0.83203125f, -2.796875f,      -1.65625f,     0.69140625f, 1.453125f,   -2.4375f,
+                              0.24609375f, -2.765625f,      1.65625f,      1.6171875f,  -0.84375f,   3.171875f,
+                              4.5625f,     2.390625f,       -2.34375f,     -1.9453125f, 1.796875f,   1.078125f,
+                              -2.203125f,  -0.08837890625f, -3.671875f,    -1.6328125f, -1.03125f,   0.65234375f,
+                              -2.046875f,  0.65625f,        -1.3046875f,   0.73046875f, 0.60546875f, -0.3125f,
+                              2.296875f,   -1.7578125f,     -0.30078125f,  0.5234375f},
+                             1e-6f);
 }
 
 TEST_F(Qwen3ModelTest, GivenUntiedEmbeddings_WhenLoadingModel_ThenItThrows) {

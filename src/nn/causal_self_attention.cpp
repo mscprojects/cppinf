@@ -20,18 +20,10 @@
 #include "tensors/dtype.h"
 #include "tensors/shape.h"
 #include "tensors/tensor_info.h"
+#include "tensors/tensor_utils.h"
 
 namespace cppinf::nn {
 namespace {
-
-tensors::TensorInfo make_result_info(std::string_view name, tensors::DType dtype, const tensors::Shape& shape) {
-    return tensors::TensorInfo{
-        .name = std::string(name),
-        .dtype = dtype,
-        .shape = shape,
-        .byte_offset = 0,
-    };
-}
 
 std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
     if (dim < 0) {
@@ -57,7 +49,7 @@ tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, 
     const auto key_sequence_length = checked_positive_dim_to_size(dims[1], "attention key sequence length");
 
     auto masked_scores = tensors::Tensor::zeros(
-        make_result_info("causal_attention_scores", tensors::DType::F32, scores.tensor_info().shape));
+        tensors::make_result_tensor_info("causal_attention_scores", tensors::DType::F32, scores.tensor_info().shape));
 
     for (std::size_t query_index = 0; query_index < query_sequence_length; ++query_index) {
         const auto last_allowed_key = past_sequence_length + query_index;
@@ -149,9 +141,9 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
     const auto value_f32 =
         ops::detail::maybe_cast_to_dtype(value, tensors::DType::F32, value_storage, "causal_self_attention_result");
 
-    auto result_f32 =
-        tensors::Tensor::zeros(make_result_info("causal_self_attention_result", tensors::DType::F32,
-                                                tensors::Shape({query_dims[0], query_dims[1], value_dims[2]})));
+    auto result_f32 = tensors::Tensor::zeros(
+        tensors::make_result_tensor_info("causal_self_attention_result", tensors::DType::F32,
+                                         tensors::Shape({query_dims[0], query_dims[1], value_dims[2]})));
 
     for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
         const auto query_head = ops::reshape(ops::narrow(query_f32, 0, head_index, 1),

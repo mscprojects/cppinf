@@ -12,8 +12,7 @@
 #include "ops/matmul.h"
 #include "ops/nn_ops.h"
 #include "ops/tensor_ops.h"
-#include "tensors/bfloat16.h"
-#include "tensors/tensor.h"
+#include "test_tensor_utils.h"
 
 namespace cppinf::tests {
 
@@ -27,111 +26,17 @@ using ops::rms_norm;
 using ops::silu;
 using ops::softmax_last_dim;
 using ops::transpose_2d;
-using tensors::bfloat16_bits_to_float;
+using tensor_test_utils::expect_float_values_near;
+using tensor_test_utils::make_bf16_bits_tensor;
+using tensor_test_utils::make_bf16_tensor;
+using tensor_test_utils::make_f32_tensor;
 using tensors::DType;
-using tensors::float_to_bfloat16_bits;
 using tensors::Shape;
 using tensors::Tensor;
 using tensors::TensorInfo;
 using tensors::TensorView;
 
-class OpsTest : public ::testing::Test {
-  protected:
-    Tensor make_f32_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
-                           std::initializer_list<float> values) const {
-        std::vector<std::byte> bytes(values.size() * sizeof(float));
-        std::size_t index = 0;
-        for (const float value : values) {
-            std::memcpy(bytes.data() + index * sizeof(float), &value, sizeof(float));
-            ++index;
-        }
-
-        return Tensor(
-            TensorInfo{
-                .name = std::string(name),
-                .dtype = DType::F32,
-                .shape = Shape(std::vector<std::int64_t>(dims)),
-                .byte_offset = 0,
-            },
-            std::move(bytes));
-    }
-
-    Tensor make_bf16_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
-                            std::initializer_list<float> values) const {
-        std::vector<std::byte> bytes(values.size() * sizeof(std::uint16_t));
-        std::size_t index = 0;
-        for (const float value : values) {
-            const auto bits = float_to_bfloat16_bits(value);
-            std::memcpy(bytes.data() + index * sizeof(std::uint16_t), &bits, sizeof(std::uint16_t));
-            ++index;
-        }
-
-        return Tensor(
-            TensorInfo{
-                .name = std::string(name),
-                .dtype = DType::BF16,
-                .shape = Shape(std::vector<std::int64_t>(dims)),
-                .byte_offset = 0,
-            },
-            std::move(bytes));
-    }
-
-    Tensor make_bf16_bits_tensor(std::string_view name, std::initializer_list<std::int64_t> dims,
-                                 std::initializer_list<std::uint16_t> values) const {
-        std::vector<std::byte> bytes(values.size() * sizeof(std::uint16_t));
-        std::size_t index = 0;
-        for (const std::uint16_t value : values) {
-            std::memcpy(bytes.data() + index * sizeof(std::uint16_t), &value, sizeof(std::uint16_t));
-            ++index;
-        }
-
-        return Tensor(
-            TensorInfo{
-                .name = std::string(name),
-                .dtype = DType::BF16,
-                .shape = Shape(std::vector<std::int64_t>(dims)),
-                .byte_offset = 0,
-            },
-            std::move(bytes));
-    }
-
-    std::vector<float> read_float_values(const TensorView& tensor_view) const {
-        std::vector<float> values;
-        values.reserve(tensor_view.tensor_info().shape.num_elements());
-
-        if (tensor_view.tensor_info().dtype == DType::F32) {
-            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
-                float value = 0.0f;
-                std::memcpy(&value, tensor_view.data().data() + index * sizeof(float), sizeof(float));
-                values.push_back(value);
-            }
-            return values;
-        }
-
-        if (tensor_view.tensor_info().dtype == DType::BF16) {
-            for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
-                std::uint16_t bits = 0;
-                std::memcpy(&bits, tensor_view.data().data() + index * sizeof(std::uint16_t), sizeof(std::uint16_t));
-                values.push_back(bfloat16_bits_to_float(bits));
-            }
-            return values;
-        }
-
-        throw std::invalid_argument("read_float_values supports only f32 and bf16 tensors.");
-    }
-
-    void expect_float_values_near(const TensorView& tensor_view, std::initializer_list<float> expected,
-                                  float tolerance) const {
-        const auto actual_values = read_float_values(tensor_view);
-        ASSERT_EQ(expected.size(), actual_values.size());
-
-        std::size_t index = 0;
-        for (const float expected_value : expected) {
-            EXPECT_NEAR(expected_value, actual_values[index], tolerance) << "index=" << index;
-            ++index;
-        }
-    }
-};
+class OpsTest : public ::testing::Test {};
 
 TEST_F(OpsTest, GivenMatchingTensors_WhenAdding_ThenElementwiseSumIsReturned) {
     const auto lhs = make_f32_tensor("lhs", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});

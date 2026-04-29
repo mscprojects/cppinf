@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "loaders/hf/hf_model_summary.h"
+#include "test_file_utils.h"
 #include "test_temp_dir.h"
 
 namespace cppinf::tests {
@@ -24,13 +25,11 @@ using tensors::TensorInfo;
 class HfModelSummaryTest : public ::testing::Test {
   protected:
     void write_text_file(std::string_view file_name, std::string_view text) {
-        std::ofstream output(temp_dir_.path() / file_name);
-        output << text;
+        file_test_utils::write_text_file(temp_dir_.path() / file_name, text);
     }
 
     void write_binary_file(std::string_view file_name, std::span<const std::byte> bytes) {
-        std::ofstream output(temp_dir_.path() / file_name, std::ios::binary);
-        output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        file_test_utils::write_binary_file(temp_dir_.path() / file_name, bytes);
     }
 
     void write_required_hf_files() {
@@ -63,7 +62,7 @@ class HfModelSummaryTest : public ::testing::Test {
         };
         const std::string header =
             R"({"__metadata__":{"format":"pt"},"embed":{"dtype":"BF16","shape":[2,4],"data_offsets":[0,16]},"token_ids":{"dtype":"U8","shape":[4],"data_offsets":[16,20]}})";
-        write_binary_file("model.safetensors", make_safetensors_file_bytes(header, tensor_data));
+        write_binary_file("model.safetensors", file_test_utils::make_safetensors_file_bytes(header, tensor_data));
     }
 
     const std::filesystem::path& model_dir() const {
@@ -71,25 +70,6 @@ class HfModelSummaryTest : public ::testing::Test {
     }
 
   private:
-    std::vector<std::byte> make_safetensors_file_bytes(std::string_view header_json,
-                                                       std::span<const std::byte> tensor_data) const {
-        std::vector<std::byte> bytes;
-        append_u64_le(static_cast<std::uint64_t>(header_json.size()), bytes);
-
-        for (const char character : header_json) {
-            bytes.push_back(static_cast<std::byte>(character));
-        }
-
-        bytes.insert(bytes.end(), tensor_data.begin(), tensor_data.end());
-        return bytes;
-    }
-
-    void append_u64_le(std::uint64_t value, std::vector<std::byte>& bytes) const {
-        for (std::size_t index = 0; index < sizeof(std::uint64_t); ++index) {
-            bytes.push_back(static_cast<std::byte>((value >> (index * 8)) & 0xffU));
-        }
-    }
-
     TestTempDir temp_dir_{"cppinf-hf-model-summary-test"};
 };
 
