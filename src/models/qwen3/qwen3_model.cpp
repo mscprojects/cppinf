@@ -167,9 +167,9 @@ tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) con
     }
 
     const auto normalized_hidden_states =
-        cppinf::ops::rms_norm(hidden_states.view(), weights_.tensor_view("model.norm.weight"), config_.rms_norm_eps);
-    const auto transposed_embedding = cppinf::ops::transpose_2d(weights_.tensor_view("model.embed_tokens.weight"));
-    auto logits = cppinf::ops::matmul(normalized_hidden_states.view(), transposed_embedding.view());
+        ops::rms_norm(hidden_states.view(), weights_.tensor_view("model.norm.weight"), config_.rms_norm_eps);
+    const auto transposed_embedding = ops::transpose_2d(weights_.tensor_view("model.embed_tokens.weight"));
+    auto logits = ops::matmul(normalized_hidden_states.view(), transposed_embedding.view());
     return rename_tensor("qwen3_logits", logits);
 }
 

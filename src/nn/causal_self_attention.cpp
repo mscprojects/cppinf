@@ -65,11 +65,9 @@ tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, 
             const auto flat_index = query_index * key_sequence_length + key_index;
             const auto value =
                 key_index <= last_allowed_key
-                    ? cppinf::ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) *
-                          scale
+                    ? ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) * scale
                     : -std::numeric_limits<float>::infinity();
-            cppinf::ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index,
-                                                   value);
+            ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index, value);
         }
     }
 
@@ -83,7 +81,7 @@ void copy_head_output_to_result(const tensors::Tensor& head_output, std::size_t 
 
 void validate_attention_inputs(const tensors::TensorView& query, const tensors::TensorView& key,
                                const tensors::TensorView& value, std::size_t past_sequence_length) {
-    cppinf::ops::detail::validate_supported_float_dtype(query.tensor_info().dtype, "causal_self_attention");
+    ops::detail::validate_supported_float_dtype(query.tensor_info().dtype, "causal_self_attention");
     if (query.tensor_info().dtype != key.tensor_info().dtype ||
         query.tensor_info().dtype != value.tensor_info().dtype) {
         throw std::invalid_argument("causal_self_attention requires matching tensor dtypes.");
@@ -144,39 +142,39 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
     std::optional<tensors::Tensor> key_storage;
     std::optional<tensors::Tensor> value_storage;
     // Score construction stays in f32 so masking and softmax keep their stable reference behavior.
-    const auto query_f32 = cppinf::ops::detail::maybe_cast_to_dtype(query, tensors::DType::F32, query_storage,
-                                                                    "causal_self_attention_result");
+    const auto query_f32 =
+        ops::detail::maybe_cast_to_dtype(query, tensors::DType::F32, query_storage, "causal_self_attention_result");
     const auto key_f32 =
-        cppinf::ops::detail::maybe_cast_to_dtype(key, tensors::DType::F32, key_storage, "causal_self_attention_result");
-    const auto value_f32 = cppinf::ops::detail::maybe_cast_to_dtype(value, tensors::DType::F32, value_storage,
-                                                                    "causal_self_attention_result");
+        ops::detail::maybe_cast_to_dtype(key, tensors::DType::F32, key_storage, "causal_self_attention_result");
+    const auto value_f32 =
+        ops::detail::maybe_cast_to_dtype(value, tensors::DType::F32, value_storage, "causal_self_attention_result");
 
     auto result_f32 =
         tensors::Tensor::zeros(make_result_info("causal_self_attention_result", tensors::DType::F32,
                                                 tensors::Shape({query_dims[0], query_dims[1], value_dims[2]})));
 
     for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
-        const auto query_head = cppinf::ops::reshape(cppinf::ops::narrow(query_f32, 0, head_index, 1),
-                                                     tensors::Shape({static_cast<std::int64_t>(query_sequence_length),
-                                                                     static_cast<std::int64_t>(query_head_size)}));
-        const auto key_head = cppinf::ops::reshape(cppinf::ops::narrow(key_f32, 0, head_index, 1),
-                                                   tensors::Shape({static_cast<std::int64_t>(key_sequence_length),
-                                                                   static_cast<std::int64_t>(query_head_size)}));
-        const auto value_head = cppinf::ops::reshape(cppinf::ops::narrow(value_f32, 0, head_index, 1),
-                                                     tensors::Shape({static_cast<std::int64_t>(key_sequence_length),
-                                                                     static_cast<std::int64_t>(value_head_size)}));
+        const auto query_head = ops::reshape(ops::narrow(query_f32, 0, head_index, 1),
+                                             tensors::Shape({static_cast<std::int64_t>(query_sequence_length),
+                                                             static_cast<std::int64_t>(query_head_size)}));
+        const auto key_head = ops::reshape(ops::narrow(key_f32, 0, head_index, 1),
+                                           tensors::Shape({static_cast<std::int64_t>(key_sequence_length),
+                                                           static_cast<std::int64_t>(query_head_size)}));
+        const auto value_head = ops::reshape(ops::narrow(value_f32, 0, head_index, 1),
+                                             tensors::Shape({static_cast<std::int64_t>(key_sequence_length),
+                                                             static_cast<std::int64_t>(value_head_size)}));
 
-        const auto transposed_key = cppinf::ops::transpose_2d(key_head);
-        const auto attention_scores = cppinf::ops::matmul(query_head, transposed_key.view());
+        const auto transposed_key = ops::transpose_2d(key_head);
+        const auto attention_scores = ops::matmul(query_head, transposed_key.view());
         const auto masked_scores =
             scale_and_causal_mask_scores(attention_scores.view(), score_scale, past_sequence_length);
-        const auto probabilities = cppinf::ops::softmax_last_dim(masked_scores.view());
-        const auto head_output = cppinf::ops::matmul(probabilities.view(), value_head);
+        const auto probabilities = ops::softmax_last_dim(masked_scores.view());
+        const auto head_output = ops::matmul(probabilities.view(), value_head);
         copy_head_output_to_result(head_output, head_index, result_f32);
     }
 
-    return cppinf::ops::detail::maybe_cast_result(std::move(result_f32), query.tensor_info().dtype,
-                                                  "causal_self_attention_result");
+    return ops::detail::maybe_cast_result(std::move(result_f32), query.tensor_info().dtype,
+                                          "causal_self_attention_result");
 }
 
 } // namespace cppinf::nn

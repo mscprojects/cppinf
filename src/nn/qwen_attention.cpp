@@ -52,8 +52,8 @@ tensors::Tensor rename_tensor(std::string_view name, const tensors::Tensor& tens
 }
 
 tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight) {
-    const auto transposed_weight = cppinf::ops::transpose_2d(weight);
-    return cppinf::ops::matmul(input, transposed_weight.view());
+    const auto transposed_weight = ops::transpose_2d(weight);
+    return ops::matmul(input, transposed_weight.view());
 }
 
 tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_count, std::size_t head_dim,
@@ -188,7 +188,7 @@ void validate_qwen_attention_inputs(const tensors::TensorView& hidden_states, co
         throw std::invalid_argument("qwen_attention requires a positive finite rope base.");
     }
 
-    cppinf::ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_attention");
+    ops::detail::validate_supported_float_dtype(hidden_states.tensor_info().dtype, "qwen_attention");
     const auto dtype = hidden_states.tensor_info().dtype;
     if (dtype != weights.q_proj_weight.tensor_info().dtype || dtype != weights.q_norm_weight.tensor_info().dtype ||
         dtype != weights.k_proj_weight.tensor_info().dtype || dtype != weights.k_norm_weight.tensor_info().dtype ||
@@ -238,8 +238,8 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
         split_heads(value_projection.view(), num_key_value_heads, head_dim, "qwen_attention_value_heads");
 
     // Apply q/k RMSNorm and rotate positions before grouped-KV expansion.
-    const auto normalized_query = cppinf::ops::rms_norm(query_heads.view(), weights.q_norm_weight, norm_epsilon);
-    const auto normalized_key = cppinf::ops::rms_norm(key_heads.view(), weights.k_norm_weight, norm_epsilon);
+    const auto normalized_query = ops::rms_norm(query_heads.view(), weights.q_norm_weight, norm_epsilon);
+    const auto normalized_key = ops::rms_norm(key_heads.view(), weights.k_norm_weight, norm_epsilon);
     const auto rotated_query = apply_rope(normalized_query.view(), sequence_position_offset, rope_base);
     const auto rotated_key = apply_rope(normalized_key.view(), sequence_position_offset, rope_base);
     const auto repeated_key = repeat_heads(rotated_key.view(), num_attention_heads, "qwen_attention_key_repeat");
