@@ -9,6 +9,9 @@ When working in this repository:
 - Separate independent blocks with a blank line, for example adjacent guard or validation `if` blocks.
 - Prefer `auto` or `const auto` when the type remains obvious.
 - Prefer `fmt::format` over string concatenation when building strings.
+- When adding explanatory code comments, prefer brief teaching-style comments that explain stage purpose and symbolic
+  tensor shapes for readers learning how inference works. Write them as one long comment line in source when practical,
+  then let clang-format wrap them.
 - Short single-line comments for non-obvious variables and functions are okay.
 - Add brief contract comments to public functions in headers.
 - In prose comments and header docs, use `,` or `.` instead of `;`.
