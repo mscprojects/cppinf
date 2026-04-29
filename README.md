@@ -77,17 +77,17 @@ or:
 To inspect a Hugging Face model directory:
 
 ```sh
-just run inspect hf ~/Sources/models/Qwen3-0.6B-Base/
+just run inspect hf ~/Sources/models/Qwen3-0.6B/
 ```
 
 To show every tensor in the weights file:
 
 ```sh
-just run inspect hf ~/Sources/models/Qwen3-0.6B-Base/ --all
+just run inspect hf ~/Sources/models/Qwen3-0.6B/ --all
 ```
 
 To limit the tensor listing:
 
 ```sh
-just run inspect hf ~/Sources/models/Qwen3-0.6B-Base/ --limit 32
+just run inspect hf ~/Sources/models/Qwen3-0.6B/ --limit 32
 ```
