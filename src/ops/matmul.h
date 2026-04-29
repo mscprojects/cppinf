@@ -1,17 +1,21 @@
 #pragma once
 
+#include <optional>
+
 #include "tensors/dtype.h"
 #include "tensors/tensor.h"
 #include "tensors/tensor_view.h"
 
 namespace cppinf::ops {
 
-// Multiplies rank-2 [m, k] and [k, n] tensors or rank-3 [b, m, k] and [b, k, n] tensors.
-// Requires matching f32 or bf16 dtypes. BF16 inputs are computed in f32 and cast back to bf16 for the result.
-tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView& rhs);
+struct MatmulOptions {
+    std::optional<tensors::DType> output_dtype = std::nullopt;
+};
 
 // Multiplies rank-2 [m, k] and [k, n] tensors or rank-3 [b, m, k] and [b, k, n] tensors.
-// Requires matching f32 or bf16 input dtypes. Supports same-dtype output, plus BF16 inputs may request an F32 result.
-tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView& rhs, tensors::DType output_dtype);
+// Supports f32 and bf16 inputs. Same-dtype inputs default to the same output dtype, while mixed f32/bf16 inputs
+// default to f32 output. BF16 inputs may request an F32 result to keep low-precision storage while materializing F32
+// scores.
+tensors::Tensor matmul(const tensors::TensorView& lhs, const tensors::TensorView& rhs, MatmulOptions options = {});
 
 } // namespace cppinf::ops

@@ -80,12 +80,28 @@ TEST_F(OpsTest, GivenCompatibleBatchedBf16Matrices_WhenMultiplyingToF32_ThenF32M
     const auto rhs = make_bf16_tensor("rhs", {2, 3, 2},
                                       {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f, 2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f});
 
-    const auto result = matmul(lhs.view(), rhs.view(), DType::F32);
+    const auto result = matmul(lhs.view(), rhs.view(), ops::MatmulOptions{.output_dtype = DType::F32});
 
     EXPECT_EQ(std::string("matmul_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
     EXPECT_EQ(Shape({2, 2, 2}), result.tensor_info().shape);
     expect_float_values_near(result.view(), {58.0f, 64.0f, 139.0f, 154.0f, -9.875f, 5.75f, 1.5f, -8.5f}, 0.0f);
+}
+
+TEST_F(OpsTest, GivenF32AndBf16Matrices_WhenMultiplying_ThenF32MatmulResultIsReturned) {
+    const auto lhs = make_f32_tensor("lhs", {2, 3}, {1.0f, -2.5f, 3.25f, 4.5f, 0.5f, -1.75f});
+    const auto rhs = make_bf16_tensor("rhs", {3, 2}, {2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f});
+    const auto expected = make_f32_tensor("matmul_result", {2, 2}, {-11.625f, -4.875f, 16.125f, -5.375f});
+
+    EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
+}
+
+TEST_F(OpsTest, GivenBf16AndF32Matrices_WhenMultiplying_ThenF32MatmulResultIsReturned) {
+    const auto lhs = make_bf16_tensor("lhs", {2, 3}, {1.0f, -2.5f, 3.25f, 4.5f, 0.5f, -1.75f});
+    const auto rhs = make_f32_tensor("rhs", {3, 2}, {2.0f, -1.0f, 0.25f, 3.5f, -4.0f, 1.5f});
+    const auto expected = make_f32_tensor("matmul_result", {2, 2}, {-11.625f, -4.875f, 16.125f, -5.375f});
+
+    EXPECT_EQ(expected, matmul(lhs.view(), rhs.view()));
 }
 
 TEST_F(OpsTest, GivenF32Tensor_WhenCastingToBf16_ThenExpectedBitsAreReturned) {
@@ -268,7 +284,8 @@ TEST_F(OpsTest, GivenF32InputsAndBf16OutputRequest_WhenMultiplying_ThenMatmulThr
     const auto lhs = make_f32_tensor("lhs", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     const auto rhs = make_f32_tensor("rhs", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
 
-    EXPECT_THROW(matmul(lhs.view(), rhs.view(), DType::BF16), std::invalid_argument);
+    EXPECT_THROW(matmul(lhs.view(), rhs.view(), ops::MatmulOptions{.output_dtype = DType::BF16}),
+                 std::invalid_argument);
 }
 
 } // namespace cppinf::tests

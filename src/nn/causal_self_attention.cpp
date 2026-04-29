@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -126,22 +125,19 @@ tensors::Tensor causal_self_attention(const tensors::TensorView& query, const te
     const auto query_head_size = static_cast<std::size_t>(query_dims[2]);
     const auto score_scale = 1.0f / std::sqrt(static_cast<float>(query_head_size));
 
-    std::optional<tensors::Tensor> value_storage;
     // Keep q/k in their storage dtype and materialize the score tensor in f32, so the backend can handle bf16
     // input accumulation while masking and softmax still operate on stable f32 scores.
-    const auto value_f32 =
-        ops::detail::maybe_cast_to_dtype(value, tensors::DType::F32, value_storage, "causal_self_attention_result");
-
     // Keep the head axis batched so oneDNN can build all attention score matrices together:
     // [heads, seq_q, head_dim] x [heads, head_dim, seq_k] -> [heads, seq_q, seq_k].
     const auto transposed_key = ops::transpose_last_two_dims(key);
-    const auto attention_scores = ops::matmul(query, transposed_key.view(), tensors::DType::F32);
+    const auto attention_scores =
+        ops::matmul(query, transposed_key.view(), ops::MatmulOptions{.output_dtype = tensors::DType::F32});
     const auto masked_scores = scale_and_causal_mask_scores(attention_scores.view(), score_scale, past_sequence_length);
     const auto probabilities = ops::softmax_last_dim(masked_scores.view());
 
     // Apply the attention weights to V for every head in one go:
     // [heads, seq_q, seq_k] x [heads, seq_k, value_dim] -> [heads, seq_q, value_dim].
-    auto result_f32 = ops::matmul(probabilities.view(), value_f32);
+    auto result_f32 = ops::matmul(probabilities.view(), value);
     result_f32 = tensors::rename_tensor("causal_self_attention_result", result_f32);
 
     return ops::detail::maybe_cast_result(std::move(result_f32), query.tensor_info().dtype,
