@@ -66,7 +66,7 @@ inline std::vector<float> read_float_values(const tensors::TensorView& tensor_vi
     std::vector<float> values;
     values.reserve(tensor_view.tensor_info().shape.num_elements());
     for (std::size_t index = 0; index < tensor_view.tensor_info().shape.num_elements(); ++index) {
-        values.push_back(ops::detail::load_float_value(tensor_view.tensor_info().dtype, tensor_view.data(), index));
+        values.push_back(ops::detail::load_float_value(tensor_view, index));
     }
     return values;
 }

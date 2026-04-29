@@ -62,8 +62,7 @@ tensors::Tensor softmax_last_dim(const tensors::TensorView& input) {
 
     auto result =
         detail::make_result_tensor("softmax_last_dim_result", compute_dtype, input_compute.tensor_info().shape);
-    const dnnl::memory::desc src_desc =
-        detail::make_dense_desc(input_compute.tensor_info().shape, compute_dtype, "softmax_last_dim");
+    const dnnl::memory::desc src_desc = detail::make_desc(input_compute, "softmax_last_dim");
     const dnnl::memory::desc dst_desc =
         detail::make_dense_desc(result.tensor_info().shape, compute_dtype, "softmax_last_dim");
     const dnnl::softmax_forward::primitive_desc primitive_desc(
@@ -109,8 +108,7 @@ tensors::Tensor rms_norm(const tensors::TensorView& input, const tensors::Tensor
     auto squared = detail::binary_with_one_dnn("rms_norm_squared", input_f32, input_f32, dnnl::algorithm::binary_mul,
                                                tensors::DType::F32);
     auto mean_squares = detail::make_result_tensor("rms_norm_mean", tensors::DType::F32, reduced_shape);
-    const dnnl::memory::desc squared_desc =
-        detail::make_dense_desc(squared.tensor_info().shape, tensors::DType::F32, "rms_norm_mean");
+    const dnnl::memory::desc squared_desc = detail::make_desc(squared.view(), "rms_norm_mean");
     const dnnl::memory::desc mean_desc = detail::make_dense_desc(reduced_shape, tensors::DType::F32, "rms_norm_mean");
     const dnnl::reduction::primitive_desc mean_primitive_desc(detail::cpu_engine(), dnnl::algorithm::reduction_mean,
                                                               squared_desc, mean_desc, 0.0f, 0.0f);

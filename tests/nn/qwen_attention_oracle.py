@@ -148,3 +148,41 @@ if __name__ == "__main__":
         norm_epsilon,
         torch.bfloat16,
     )
+
+    grouped_hidden_size = 6
+    grouped_num_attention_heads = 4
+    grouped_num_key_value_heads = 2
+    grouped_head_dim = 2
+
+    torch.manual_seed(1337)
+    grouped_hidden_states_f32 = round_tensor(torch.empty(3, grouped_hidden_size).uniform_(-1.4, 1.4))
+    grouped_q_proj_weight_f32 = round_tensor(
+        torch.empty(grouped_num_attention_heads * grouped_head_dim, grouped_hidden_size).uniform_(-1.4, 1.4)
+    )
+    grouped_q_norm_weight_f32 = round_tensor(torch.empty(grouped_head_dim).uniform_(0.5, 1.5))
+    grouped_k_proj_weight_f32 = round_tensor(
+        torch.empty(grouped_num_key_value_heads * grouped_head_dim, grouped_hidden_size).uniform_(-1.4, 1.4)
+    )
+    grouped_k_norm_weight_f32 = round_tensor(torch.empty(grouped_head_dim).uniform_(0.5, 1.5))
+    grouped_v_proj_weight_f32 = round_tensor(
+        torch.empty(grouped_num_key_value_heads * grouped_head_dim, grouped_hidden_size).uniform_(-1.4, 1.4)
+    )
+    grouped_o_proj_weight_f32 = round_tensor(
+        torch.empty(grouped_hidden_size, grouped_num_attention_heads * grouped_head_dim).uniform_(-1.4, 1.4)
+    )
+
+    run_case(
+        "f32_grouped_kv_heads",
+        grouped_hidden_states_f32,
+        grouped_q_proj_weight_f32,
+        grouped_q_norm_weight_f32,
+        grouped_k_proj_weight_f32,
+        grouped_k_norm_weight_f32,
+        grouped_v_proj_weight_f32,
+        grouped_o_proj_weight_f32,
+        grouped_num_attention_heads,
+        grouped_num_key_value_heads,
+        grouped_head_dim,
+        norm_epsilon,
+        torch.float32,
+    )

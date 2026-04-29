@@ -40,10 +40,13 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
 }
 
 tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, float scale) {
+    if (scores.tensor_info().shape.rank() != 2) {
+        throw std::invalid_argument("qwen_attention requires rank-2 attention score matrices.");
+    }
+
     const auto& dims = scores.tensor_info().shape.dims();
-    const auto head_count = checked_positive_dim_to_size(dims[0], "qwen_attention attention head count");
-    const auto sequence_length = checked_positive_dim_to_size(dims[1], "qwen_attention sequence length");
-    const auto key_sequence_length = checked_positive_dim_to_size(dims[2], "qwen_attention key sequence length");
+    const auto sequence_length = checked_positive_dim_to_size(dims[0], "qwen_attention sequence length");
+    const auto key_sequence_length = checked_positive_dim_to_size(dims[1], "qwen_attention key sequence length");
     if (sequence_length != key_sequence_length) {
         throw std::invalid_argument("qwen_attention requires square attention score matrices.");
     }
@@ -51,17 +54,14 @@ tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, 
     auto masked_scores = tensors::Tensor::zeros(
         tensors::make_result_tensor_info("qwen_attention_scores", tensors::DType::F32, scores.tensor_info().shape));
 
-    for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
-        for (std::size_t query_index = 0; query_index < sequence_length; ++query_index) {
-            for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
-                const auto flat_index =
-                    ((head_index * sequence_length) + query_index) * key_sequence_length + key_index;
-                const auto value =
-                    key_index <= query_index
-                        ? ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) * scale
-                        : -std::numeric_limits<float>::infinity();
-                ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index, value);
-            }
+    for (std::size_t query_index = 0; query_index < sequence_length; ++query_index) {
+        for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
+            const auto flat_index = query_index * key_sequence_length + key_index;
+            const auto value =
+                key_index <= query_index
+                    ? ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) * scale
+                    : -std::numeric_limits<float>::infinity();
+            ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index, value);
         }
     }
 
@@ -73,10 +73,10 @@ tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::
     return ops::matmul(input, transposed_weight.view());
 }
 
-tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_count, std::size_t head_dim,
-                            std::string_view result_name) {
+tensors::TensorView reshape_heads(const tensors::TensorView& input, std::size_t head_count, std::size_t head_dim,
+                                  std::string_view result_name) {
     if (input.tensor_info().shape.rank() != 2) {
-        throw std::invalid_argument("split_heads requires a rank-2 tensor.");
+        throw std::invalid_argument("reshape_heads requires a rank-2 tensor.");
     }
 
     const auto& dims = input.tensor_info().shape.dims();
@@ -88,88 +88,9 @@ tensors::Tensor split_heads(const tensors::TensorView& input, std::size_t head_c
             fmt::format("{} requires merged head size to equal head_count * head_dim.", result_name));
     }
 
-    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
-        result_name, input.tensor_info().dtype,
-        tensors::Shape({static_cast<std::int64_t>(head_count), static_cast<std::int64_t>(sequence_length),
-                        static_cast<std::int64_t>(head_dim)})));
-
-    // Move from the packed per-token layout [seq, heads * head_dim] to the head-major layout [heads, seq, head_dim]
-    // used by attention.
-    const auto element_size = tensors::element_size_bytes(input.tensor_info().dtype);
-    const auto head_bytes = head_dim * element_size;
-    for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
-        for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
-            const auto source_offset = (sequence_index * merged_head_size + head_index * head_dim) * element_size;
-            const auto destination_offset = ((head_index * sequence_length) + sequence_index) * head_bytes;
-            std::memcpy(result.mutable_data().data() + destination_offset, input.data().data() + source_offset,
-                        head_bytes);
-        }
-    }
-
-    return result;
-}
-
-tensors::Tensor merge_heads(const tensors::TensorView& input, std::string_view result_name) {
-    if (input.tensor_info().shape.rank() != 3) {
-        throw std::invalid_argument("merge_heads requires a rank-3 tensor.");
-    }
-
-    const auto& dims = input.tensor_info().shape.dims();
-    const auto head_count = checked_positive_dim_to_size(dims[0], fmt::format("{} head count", result_name));
-    const auto sequence_length = checked_positive_dim_to_size(dims[1], fmt::format("{} sequence length", result_name));
-    const auto head_dim = checked_positive_dim_to_size(dims[2], fmt::format("{} head dim", result_name));
-    const auto merged_head_size = head_count * head_dim;
-
-    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
-        result_name, input.tensor_info().dtype,
-        tensors::Shape({static_cast<std::int64_t>(sequence_length), static_cast<std::int64_t>(merged_head_size)})));
-
-    // Undo split_heads by packing the head-major layout [heads, seq, head_dim] back into [seq, heads * head_dim].
-    const auto element_size = tensors::element_size_bytes(input.tensor_info().dtype);
-    const auto head_bytes = head_dim * element_size;
-    for (std::size_t head_index = 0; head_index < head_count; ++head_index) {
-        for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
-            const auto source_offset = ((head_index * sequence_length) + sequence_index) * head_bytes;
-            const auto destination_offset = (sequence_index * merged_head_size + head_index * head_dim) * element_size;
-            std::memcpy(result.mutable_data().data() + destination_offset, input.data().data() + source_offset,
-                        head_bytes);
-        }
-    }
-
-    return result;
-}
-
-tensors::Tensor repeat_heads(const tensors::TensorView& input, std::size_t target_head_count,
-                             std::string_view result_name) {
-    if (input.tensor_info().shape.rank() != 3) {
-        throw std::invalid_argument("repeat_heads requires a rank-3 tensor.");
-    }
-
-    const auto& dims = input.tensor_info().shape.dims();
-    const auto input_head_count = checked_positive_dim_to_size(dims[0], fmt::format("{} head count", result_name));
-    const auto sequence_length = checked_positive_dim_to_size(dims[1], fmt::format("{} sequence length", result_name));
-    const auto head_dim = checked_positive_dim_to_size(dims[2], fmt::format("{} head dim", result_name));
-    if (target_head_count % input_head_count != 0) {
-        throw std::invalid_argument(
-            fmt::format("{} requires target head count to divide by input head count.", result_name));
-    }
-
-    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
-        result_name, input.tensor_info().dtype,
-        tensors::Shape({static_cast<std::int64_t>(target_head_count), static_cast<std::int64_t>(sequence_length),
-                        static_cast<std::int64_t>(head_dim)})));
-
-    // Grouped-query attention keeps fewer key/value heads than query heads, so duplicate each K/V head until the
-    // tensor has one head slot per query head.
-    const auto repeat_count = target_head_count / input_head_count;
-    const auto bytes_per_head = sequence_length * head_dim * tensors::element_size_bytes(input.tensor_info().dtype);
-    for (std::size_t head_index = 0; head_index < target_head_count; ++head_index) {
-        const auto source_head_index = head_index / repeat_count;
-        std::memcpy(result.mutable_data().data() + head_index * bytes_per_head,
-                    input.data().data() + source_head_index * bytes_per_head, bytes_per_head);
-    }
-
-    return result;
+    return ops::reshape(input,
+                        tensors::Shape({static_cast<std::int64_t>(sequence_length),
+                                        static_cast<std::int64_t>(head_count), static_cast<std::int64_t>(head_dim)}));
 }
 
 void validate_projection_weight(const tensors::TensorView& weight, std::string_view name, std::size_t output_size,
@@ -244,19 +165,77 @@ void validate_qwen_attention_inputs(const tensors::TensorView& hidden_states, co
 
 tensors::Tensor fused_causal_attention(const tensors::TensorView& query, const tensors::TensorView& key,
                                        const tensors::TensorView& value) {
-    const auto& query_dims = query.tensor_info().shape.dims();
-    const auto query_head_size = checked_positive_dim_to_size(query_dims[2], "qwen_attention query head size");
-    const auto score_scale = 1.0f / std::sqrt(static_cast<float>(query_head_size));
+    if (query.tensor_info().shape.rank() != 3 || key.tensor_info().shape.rank() != 3 ||
+        value.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("qwen_attention requires rank-3 query, key, and value tensors.");
+    }
 
-    const auto transposed_key = ops::transpose_last_two_dims(key);
-    const auto attention_scores =
-        ops::matmul(query, transposed_key.view(), ops::MatmulOptions{.output_dtype = tensors::DType::F32});
-    const auto masked_scores = scale_and_causal_mask_scores(attention_scores.view(), score_scale);
-    const auto probabilities = ops::softmax_last_dim(masked_scores.view());
-    auto result_f32 = ops::matmul(probabilities.view(), value);
-    result_f32 = tensors::rename_tensor("qwen_attention_attention_output", result_f32);
-    return ops::detail::maybe_cast_result(std::move(result_f32), query.tensor_info().dtype,
-                                          "qwen_attention_attention_output");
+    const auto& query_dims = query.tensor_info().shape.dims();
+    const auto& key_dims = key.tensor_info().shape.dims();
+    const auto& value_dims = value.tensor_info().shape.dims();
+    const auto sequence_length = checked_positive_dim_to_size(query_dims[0], "qwen_attention query sequence length");
+    const auto query_head_count = checked_positive_dim_to_size(query_dims[1], "qwen_attention query head count");
+    const auto key_sequence_length = checked_positive_dim_to_size(key_dims[0], "qwen_attention key sequence length");
+    const auto key_head_count = checked_positive_dim_to_size(key_dims[1], "qwen_attention key head count");
+    const auto value_sequence_length =
+        checked_positive_dim_to_size(value_dims[0], "qwen_attention value sequence length");
+    const auto value_head_count = checked_positive_dim_to_size(value_dims[1], "qwen_attention value head count");
+    const auto query_head_size = checked_positive_dim_to_size(query_dims[2], "qwen_attention query head size");
+    const auto key_head_size = checked_positive_dim_to_size(key_dims[2], "qwen_attention key head size");
+    const auto value_head_size = checked_positive_dim_to_size(value_dims[2], "qwen_attention value head size");
+    if (key_head_count != value_head_count) {
+        throw std::invalid_argument("qwen_attention requires matching key/value head counts.");
+    }
+
+    if (query_head_count % key_head_count != 0) {
+        throw std::invalid_argument("qwen_attention requires query heads to divide by key/value heads.");
+    }
+
+    if (sequence_length != key_sequence_length || sequence_length != value_sequence_length) {
+        throw std::invalid_argument("qwen_attention requires matching query/key/value sequence lengths.");
+    }
+
+    if (query_head_size != key_head_size || query_head_size != value_head_size) {
+        throw std::invalid_argument("qwen_attention requires matching query/key/value head sizes.");
+    }
+
+    const auto score_scale = 1.0f / std::sqrt(static_cast<float>(query_head_size));
+    const auto queries_per_key_value_head = query_head_count / key_head_count;
+    const auto element_size = tensors::element_size_bytes(query.tensor_info().dtype);
+    const auto head_bytes = query_head_size * element_size;
+
+    auto result = tensors::Tensor::zeros(
+        tensors::make_result_tensor_info("qwen_attention_attention_output", query.tensor_info().dtype,
+                                         tensors::Shape({query_dims[0], query_dims[1], query_dims[2]})));
+    auto result_data = result.mutable_data();
+
+    for (std::size_t key_value_head_index = 0; key_value_head_index < key_head_count; ++key_value_head_index) {
+        const auto key_head = ops::squeeze(ops::narrow(key, 1, key_value_head_index, 1), 1);
+        const auto value_head = ops::squeeze(ops::narrow(value, 1, key_value_head_index, 1), 1);
+        const auto transposed_key = ops::transpose_2d(key_head);
+        const auto query_head_begin = key_value_head_index * queries_per_key_value_head;
+        const auto query_head_end = query_head_begin + queries_per_key_value_head;
+
+        for (std::size_t query_head_index = query_head_begin; query_head_index < query_head_end; ++query_head_index) {
+            const auto query_head = ops::squeeze(ops::narrow(query, 1, query_head_index, 1), 1);
+            const auto attention_scores =
+                ops::matmul(query_head, transposed_key.view(), ops::MatmulOptions{.output_dtype = tensors::DType::F32});
+            const auto masked_scores = scale_and_causal_mask_scores(attention_scores.view(), score_scale);
+            const auto probabilities = ops::softmax_last_dim(masked_scores.view());
+            auto head_result = ops::matmul(probabilities.view(), value_head);
+            head_result = ops::detail::maybe_cast_result(std::move(head_result), query.tensor_info().dtype,
+                                                         "qwen_attention_attention_output_head");
+
+            for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
+                const auto destination_offset = ((sequence_index * query_head_count) + query_head_index) * head_bytes;
+                const auto source_offset = sequence_index * head_bytes;
+                std::memcpy(result_data.data() + destination_offset, head_result.data().data() + source_offset,
+                            head_bytes);
+            }
+        }
+    }
+
+    return result;
 }
 
 } // namespace
@@ -273,34 +252,28 @@ tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const Q
     const auto key_projection = linear_project(hidden_states, weights.k_proj_weight);
     const auto value_projection = linear_project(hidden_states, weights.v_proj_weight);
 
-    // Split the packed head dimension so attention can work head-by-head: queries become [q_heads, seq, head_dim], and
-    // keys/values become [kv_heads, seq, head_dim].
+    // Reinterpret the packed per-token layout [seq, heads * head_dim] as [seq, heads, head_dim] without copying.
     const auto query_heads =
-        split_heads(query_projection.view(), num_attention_heads, head_dim, "qwen_attention_query_heads");
+        reshape_heads(query_projection.view(), num_attention_heads, head_dim, "qwen_attention_query_heads");
     const auto key_heads =
-        split_heads(key_projection.view(), num_key_value_heads, head_dim, "qwen_attention_key_heads");
+        reshape_heads(key_projection.view(), num_key_value_heads, head_dim, "qwen_attention_key_heads");
     const auto value_heads =
-        split_heads(value_projection.view(), num_key_value_heads, head_dim, "qwen_attention_value_heads");
+        reshape_heads(value_projection.view(), num_key_value_heads, head_dim, "qwen_attention_value_heads");
 
     // Normalize queries and keys per head, then apply RoPE so token position rotates each feature pair before
-    // attention sees the vectors.
-    const auto normalized_query = ops::rms_norm(query_heads.view(), weights.q_norm_weight, norm_epsilon);
-    const auto normalized_key = ops::rms_norm(key_heads.view(), weights.k_norm_weight, norm_epsilon);
-    const auto rotated_query = apply_rope(normalized_query.view(), sequence_position_offset, rope_base);
-    const auto rotated_key = apply_rope(normalized_key.view(), sequence_position_offset, rope_base);
+    // attention sees the vectors. Keep the packed [seq, heads, dim] layout so split/merge stay metadata-only.
+    const auto normalized_query = ops::rms_norm(query_heads, weights.q_norm_weight, norm_epsilon);
+    const auto normalized_key = ops::rms_norm(key_heads, weights.k_norm_weight, norm_epsilon);
+    const auto rotated_query = apply_rope(normalized_query.view(), sequence_position_offset, rope_base, 0);
+    const auto rotated_key = apply_rope(normalized_key.view(), sequence_position_offset, rope_base, 0);
 
-    // Qwen uses grouped KV heads, so duplicate each key/value head until keys and values match the query-head count
-    // [q_heads, seq, head_dim].
-    const auto repeated_key = repeat_heads(rotated_key.view(), num_attention_heads, "qwen_attention_key_repeat");
-    const auto repeated_value = repeat_heads(value_heads.view(), num_attention_heads, "qwen_attention_value_repeat");
-
-    // Fuse the causal attention core into qwen_attention so the Qwen-specific path owns the score construction,
-    // masking, softmax, and value mixing directly.
-    const auto attention_output =
-        fused_causal_attention(rotated_query.view(), repeated_key.view(), repeated_value.view());
-    const auto merged_attention = merge_heads(attention_output.view(), "qwen_attention_merged_heads");
-    return tensors::rename_tensor("qwen_attention_result",
-                                  linear_project(merged_attention.view(), weights.o_proj_weight));
+    // Keep keys and values at KV-head cardinality, then map each query head to its grouped KV head inside the fused
+    // causal attention core instead of materializing repeated K/V tensors.
+    const auto attention_output = fused_causal_attention(rotated_query.view(), rotated_key.view(), value_heads);
+    const auto packed_attention =
+        ops::reshape(attention_output.view(), tensors::Shape({query_projection.tensor_info().shape.dims()[0],
+                                                              query_projection.tensor_info().shape.dims()[1]}));
+    return tensors::rename_tensor("qwen_attention_result", linear_project(packed_attention, weights.o_proj_weight));
 }
 
 } // namespace cppinf::nn
