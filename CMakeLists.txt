@@ -74,14 +74,20 @@ set(CPPINF_SOURCES
     src/files/safetensors_file.h
     src/loaders/hf/hf_config.cpp
     src/loaders/hf/hf_config.h
-    src/loaders/hf/hf_model_files.cpp
+     src/loaders/hf/hf_model_files.cpp
      src/loaders/hf/hf_model_files.h
      src/loaders/hf/hf_model_summary.cpp
      src/loaders/hf/hf_model_summary.h
+     src/models/qwen3/qwen3_model.cpp
+     src/models/qwen3/qwen3_model.h
      src/nn/causal_self_attention.cpp
      src/nn/causal_self_attention.h
+     src/nn/qwen_decoder_block.cpp
+     src/nn/qwen_decoder_block.h
      src/nn/qwen_attention.cpp
      src/nn/qwen_attention.h
+     src/nn/qwen_mlp.cpp
+     src/nn/qwen_mlp.h
      src/nn/rope.cpp
      src/nn/rope.h
      src/ops/elementwise_ops.cpp
@@ -123,11 +129,14 @@ if(BUILD_TESTING)
         ${CPPINF_SOURCES}
         tests/cli/cli_app_test.cpp
         tests/files/safetensors_file_test.cpp
-        tests/loaders/hf/hf_config_test.cpp
+         tests/loaders/hf/hf_config_test.cpp
          tests/loaders/hf/hf_model_files_test.cpp
          tests/loaders/hf/hf_model_summary_test.cpp
+         tests/models/qwen3/qwen3_model_test.cpp
          tests/nn/causal_self_attention_test.cpp
+         tests/nn/qwen_decoder_block_test.cpp
          tests/nn/qwen_attention_test.cpp
+         tests/nn/qwen_mlp_test.cpp
          tests/nn/rope_test.cpp
          tests/ops/ops_test.cpp
          tests/tensors/tensor_test.cpp

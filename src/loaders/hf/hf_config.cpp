@@ -45,6 +45,22 @@ std::int64_t read_i64(const json& value, std::string_view field_name) {
     return value.get<std::int64_t>();
 }
 
+float read_float(const json& value, std::string_view field_name) {
+    if (!value.is_number()) {
+        throw std::invalid_argument(fmt::format("HF config field '{}' must be numeric.", field_name));
+    }
+
+    return value.get<float>();
+}
+
+bool read_bool(const json& value, std::string_view field_name) {
+    if (!value.is_boolean()) {
+        throw std::invalid_argument(fmt::format("HF config field '{}' must be a boolean.", field_name));
+    }
+
+    return value.get<bool>();
+}
+
 std::vector<std::string> read_architectures(const json& value) {
     if (!value.is_array()) {
         throw std::invalid_argument("HF config field 'architectures' must be an array.");
@@ -112,6 +128,7 @@ HfConfig HfConfig::from_json_text(std::string_view json_text) {
     return HfConfig{
         .architectures = detail::read_architectures(detail::require_field(json_config, "architectures")),
         .model_type = detail::require_field(json_config, "model_type").get<std::string>(),
+        .head_dim = detail::read_size(detail::require_field(json_config, "head_dim"), "head_dim"),
         .hidden_size = detail::read_size(detail::require_field(json_config, "hidden_size"), "hidden_size"),
         .intermediate_size =
             detail::read_size(detail::require_field(json_config, "intermediate_size"), "intermediate_size"),
@@ -126,6 +143,10 @@ HfConfig HfConfig::from_json_text(std::string_view json_text) {
         .vocab_size = detail::read_size(detail::require_field(json_config, "vocab_size"), "vocab_size"),
         .bos_token_id = detail::read_i64(detail::require_field(json_config, "bos_token_id"), "bos_token_id"),
         .eos_token_id = detail::read_i64(detail::require_field(json_config, "eos_token_id"), "eos_token_id"),
+        .rms_norm_eps = detail::read_float(detail::require_field(json_config, "rms_norm_eps"), "rms_norm_eps"),
+        .rope_theta = detail::read_float(detail::require_field(json_config, "rope_theta"), "rope_theta"),
+        .tie_word_embeddings =
+            detail::read_bool(detail::require_field(json_config, "tie_word_embeddings"), "tie_word_embeddings"),
         .tensor_dtype = detail::parse_torch_dtype(detail::require_field(json_config, "torch_dtype").get<std::string>()),
     };
 }

@@ -36,6 +36,7 @@ class HfModelSummaryTest : public ::testing::Test {
             "architectures": ["Qwen3ForCausalLM"],
             "bos_token_id": 151643,
             "eos_token_id": 151643,
+            "head_dim": 128,
             "hidden_size": 1024,
             "intermediate_size": 3072,
             "max_position_embeddings": 32768,
@@ -43,6 +44,9 @@ class HfModelSummaryTest : public ::testing::Test {
             "num_attention_heads": 16,
             "num_hidden_layers": 28,
             "num_key_value_heads": 8,
+            "rms_norm_eps": 1e-6,
+            "rope_theta": 1000000,
+            "tie_word_embeddings": true,
             "torch_dtype": "bfloat16",
             "vocab_size": 151936
         })");
@@ -97,6 +101,7 @@ TEST_F(HfModelSummaryTest, GivenValidDirectory_WhenLoadingSummary_ThenExpectedSu
             HfConfig{
                 .architectures = {"Qwen3ForCausalLM"},
                 .model_type = "qwen3",
+                .head_dim = 128,
                 .hidden_size = 1024,
                 .intermediate_size = 3072,
                 .max_position_embeddings = 32768,
@@ -106,6 +111,9 @@ TEST_F(HfModelSummaryTest, GivenValidDirectory_WhenLoadingSummary_ThenExpectedSu
                 .vocab_size = 151936,
                 .bos_token_id = 151643,
                 .eos_token_id = 151643,
+                .rms_norm_eps = 1e-6f,
+                .rope_theta = 1000000.0f,
+                .tie_word_embeddings = true,
                 .tensor_dtype = DType::BF16,
             },
         .metadata_count = 1,
@@ -153,6 +161,7 @@ TEST_F(HfModelSummaryTest, GivenSummary_WhenFormatting_ThenReadableTextIsProduce
             HfConfig{
                 .architectures = {"Qwen3ForCausalLM"},
                 .model_type = "qwen3",
+                .head_dim = 128,
                 .hidden_size = 1024,
                 .intermediate_size = 3072,
                 .max_position_embeddings = 32768,
@@ -162,6 +171,9 @@ TEST_F(HfModelSummaryTest, GivenSummary_WhenFormatting_ThenReadableTextIsProduce
                 .vocab_size = 151936,
                 .bos_token_id = 151643,
                 .eos_token_id = 151643,
+                .rms_norm_eps = 1e-6f,
+                .rope_theta = 1000000.0f,
+                .tie_word_embeddings = true,
                 .tensor_dtype = DType::BF16,
             },
         .metadata_count = 1,

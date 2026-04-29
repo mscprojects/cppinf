@@ -14,6 +14,7 @@ namespace cppinf::loaders::hf {
 struct HfConfig {
     std::vector<std::string> architectures;
     std::string model_type;
+    std::size_t head_dim{};
     std::size_t hidden_size{};
     std::size_t intermediate_size{};
     std::size_t max_position_embeddings{};
@@ -23,6 +24,9 @@ struct HfConfig {
     std::size_t vocab_size{};
     std::int64_t bos_token_id{};
     std::int64_t eos_token_id{};
+    float rms_norm_eps{};
+    float rope_theta{};
+    bool tie_word_embeddings{};
     tensors::DType tensor_dtype{};
 
     bool operator==(const HfConfig&) const = default;
