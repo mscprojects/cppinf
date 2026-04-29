@@ -2,7 +2,7 @@
 
 Run with:
     uv run --with transformers==4.52.3 python tests/tokenizers/hf/hf_tokenizer_oracle.py \
-        --model-dir /home/q618175/Sources/models/Qwen3-0.6B-Base
+        --model-dir /home/q618175/Sources/models/Qwen3-0.6B
 """
 
 import argparse

@@ -314,12 +314,25 @@ std::unordered_map<std::string, std::size_t> parse_merges(const json& tokenizer_
 
     std::unordered_map<std::string, std::size_t> merge_ranks;
     for (std::size_t index = 0; index < merges_json.size(); ++index) {
-        const auto merge_text = read_string(merges_json[index], "model.merges entry");
-        const auto separator = merge_text.find(' ');
-        if (separator == std::string::npos) {
-            throw std::invalid_argument("BPE merge entries must contain a space separator.");
+        std::string left;
+        std::string right;
+
+        if (merges_json[index].is_string()) {
+            const auto merge_text = read_string(merges_json[index], "model.merges entry");
+            const auto separator = merge_text.find(' ');
+            if (separator == std::string::npos) {
+                throw std::invalid_argument("BPE merge string entries must contain a space separator.");
+            }
+            left = merge_text.substr(0, separator);
+            right = merge_text.substr(separator + 1);
+        } else if (merges_json[index].is_array() && merges_json[index].size() == 2) {
+            left = read_string(merges_json[index][0], "model.merges[0]");
+            right = read_string(merges_json[index][1], "model.merges[1]");
+        } else {
+            throw std::invalid_argument("BPE merge entries must be strings or 2-element string arrays.");
         }
-        merge_ranks.emplace(merge_key(merge_text.substr(0, separator), merge_text.substr(separator + 1)), index);
+
+        merge_ranks.emplace(merge_key(left, right), index);
     }
     return merge_ranks;
 }

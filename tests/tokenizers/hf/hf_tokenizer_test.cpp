@@ -193,6 +193,6 @@ TEST_F(HfTokenizerTest, GivenRealQwenTokenizer_WhenEncodingAndDecoding_ThenExpec
                                                          12590, 13}));
     EXPECT_EQ(std::string("<|im_start|>user\nHello<|im_end|>\n"),
               tokenizer.decode(std::vector<std::int64_t>{151644, 872, 198, 9707, 151645, 198}));
-    EXPECT_EQ(std::int64_t{151643}, tokenizer.eos_token_id().value());
+    EXPECT_EQ(std::int64_t{151645}, tokenizer.eos_token_id().value());
     EXPECT_EQ(std::int64_t{151643}, tokenizer.pad_token_id().value());
 }

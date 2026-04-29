@@ -1,9 +1,9 @@
-"""Offline oracle generator for the real Qwen3-0.6B-Base checkpoint.
+"""Offline oracle generator for the real Qwen3-0.6B checkpoint.
 
 Run with:
     uv run --with torch==2.11.0 --with transformers==4.52.3 \
         python tests/models/qwen3/qwen3_real_model_oracle.py \
-        --model-dir /home/q618175/Sources/models/Qwen3-0.6B-Base
+        --model-dir /home/q618175/Sources/models/Qwen3-0.6B
 """
 
 import argparse
