@@ -1,6 +1,9 @@
 #include "ops/nn_ops.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
@@ -75,6 +78,67 @@ tensors::Tensor softmax_last_dim(const tensors::TensorView& input) {
     primitive.execute(stream, {{DNNL_ARG_SRC, src_memory}, {DNNL_ARG_DST, dst_memory}});
     stream.wait();
     return detail::maybe_cast_result(std::move(result), output_dtype, "softmax_last_dim_result");
+}
+
+tensors::Tensor scaled_causal_softmax_last_dim(const tensors::TensorView& input, float scale) {
+    validate_last_dim_operation_input(input, "scaled_causal_softmax_last_dim");
+    if (input.tensor_info().shape.rank() < 2) {
+        throw std::invalid_argument("scaled_causal_softmax_last_dim requires a tensor with rank at least 2.");
+    }
+
+    if (!std::isfinite(scale)) {
+        throw std::invalid_argument("scaled_causal_softmax_last_dim requires a finite scale.");
+    }
+
+    const auto& dims = input.tensor_info().shape.dims();
+    const auto query_length = checked_dim_to_size(dims[dims.size() - 2], "scaled_causal_softmax_last_dim query length");
+    const auto key_length = checked_dim_to_size(dims[dims.size() - 1], "scaled_causal_softmax_last_dim key length");
+    if (query_length == 0 || key_length == 0) {
+        throw std::invalid_argument("scaled_causal_softmax_last_dim requires non-empty attention dimensions.");
+    }
+
+    if (query_length != key_length) {
+        throw std::invalid_argument("scaled_causal_softmax_last_dim requires square attention score matrices.");
+    }
+
+    std::optional<tensors::Tensor> input_storage;
+    const auto input_f32 =
+        detail::maybe_cast_to_dtype(input, tensors::DType::F32, input_storage, "scaled_causal_softmax_last_dim_result");
+
+    auto result = detail::make_result_tensor("scaled_causal_softmax_last_dim_result", tensors::DType::F32,
+                                             input.tensor_info().shape);
+    const auto matrix_size = query_length * key_length;
+    const auto matrix_count = input.tensor_info().shape.num_elements() / matrix_size;
+
+    for (std::size_t matrix_index = 0; matrix_index < matrix_count; ++matrix_index) {
+        const auto matrix_offset = matrix_index * matrix_size;
+        for (std::size_t query_index = 0; query_index < query_length; ++query_index) {
+            const auto row_offset = matrix_offset + query_index * key_length;
+            auto max_value = -std::numeric_limits<float>::infinity();
+            for (std::size_t key_index = 0; key_index <= query_index; ++key_index) {
+                const auto value = detail::load_float_value(input_f32, row_offset + key_index) * scale;
+                max_value = std::max(max_value, value);
+            }
+
+            auto sum = 0.0f;
+            for (std::size_t key_index = 0; key_index < key_length; ++key_index) {
+                const auto value =
+                    key_index <= query_index
+                        ? std::exp(detail::load_float_value(input_f32, row_offset + key_index) * scale - max_value)
+                        : 0.0f;
+                detail::store_float_value(tensors::DType::F32, result.mutable_data(), row_offset + key_index, value);
+                sum += value;
+            }
+
+            for (std::size_t key_index = 0; key_index < key_length; ++key_index) {
+                const auto flat_index = row_offset + key_index;
+                const auto value = detail::load_float_value(tensors::DType::F32, result.data(), flat_index) / sum;
+                detail::store_float_value(tensors::DType::F32, result.mutable_data(), flat_index, value);
+            }
+        }
+    }
+
+    return result;
 }
 
 tensors::Tensor rms_norm(const tensors::TensorView& input, const tensors::TensorView& weight, float epsilon) {

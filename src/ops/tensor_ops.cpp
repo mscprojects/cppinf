@@ -1,7 +1,9 @@
 #include "ops/tensor_ops.h"
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
+#include <numeric>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -29,6 +31,61 @@ std::int64_t checked_size_to_dim(std::size_t value, std::string_view field_name)
     }
 
     return static_cast<std::int64_t>(value);
+}
+
+std::size_t checked_positive_size(std::size_t value, std::string_view field_name) {
+    if (value == 0) {
+        throw std::invalid_argument(fmt::format("{} must be non-zero.", field_name));
+    }
+
+    return value;
+}
+
+std::vector<std::size_t> coordinates_from_flat_index(std::size_t flat_index, const std::vector<std::int64_t>& dims) {
+    std::vector<std::size_t> coordinates(dims.size(), 0);
+    for (std::size_t axis = dims.size(); axis-- > 0;) {
+        const auto dim = checked_dim_to_size(dims[axis], "logical index dim");
+        if (dim == 0) {
+            throw std::invalid_argument("Cannot index into a tensor with an empty dimension.");
+        }
+
+        coordinates[axis] = flat_index % dim;
+        flat_index /= dim;
+    }
+
+    return coordinates;
+}
+
+std::size_t byte_offset_from_coordinates(const std::vector<std::size_t>& coordinates,
+                                         const std::vector<std::size_t>& strides_bytes) {
+    std::size_t byte_offset = 0;
+    for (std::size_t axis = 0; axis < coordinates.size(); ++axis) {
+        const auto axis_offset = coordinates[axis] * strides_bytes[axis];
+        if (axis_offset > std::numeric_limits<std::size_t>::max() - byte_offset) {
+            throw std::overflow_error("Tensor byte offset overflowed.");
+        }
+        byte_offset += axis_offset;
+    }
+
+    return byte_offset;
+}
+
+void validate_permutation_axes(std::span<const std::size_t> axes, std::size_t rank) {
+    if (axes.size() != rank) {
+        throw std::invalid_argument("permute requires one axis per input dimension.");
+    }
+
+    std::vector<bool> seen(rank, false);
+    for (const auto axis : axes) {
+        if (axis >= rank) {
+            throw std::out_of_range("permute axis is out of bounds.");
+        }
+
+        if (seen[axis]) {
+            throw std::invalid_argument("permute axes must be unique.");
+        }
+        seen[axis] = true;
+    }
 }
 
 tensors::Tensor transpose_last_two_dims_impl(const tensors::TensorView& input, std::string_view result_name) {
@@ -198,6 +255,68 @@ tensors::TensorView narrow(const tensors::TensorView& input, std::size_t dim, st
     };
 
     return tensors::TensorView(std::move(narrowed_info), input.data(), input.strides_bytes(), byte_start);
+}
+
+tensors::Tensor permute(const tensors::TensorView& input, std::span<const std::size_t> axes) {
+    validate_permutation_axes(axes, input.tensor_info().shape.rank());
+
+    const auto& input_dims = input.tensor_info().shape.dims();
+    std::vector<std::int64_t> output_dims;
+    output_dims.reserve(axes.size());
+    for (const auto axis : axes) {
+        output_dims.push_back(input_dims[axis]);
+    }
+
+    const auto output_shape = tensors::Shape(std::move(output_dims));
+    auto result = detail::make_result_tensor("permute_result", input.tensor_info().dtype, output_shape);
+    const auto element_size = tensors::element_size_bytes(input.tensor_info().dtype);
+    const auto input_data = input.data();
+    auto result_data = result.mutable_data();
+
+    for (std::size_t output_index = 0; output_index < output_shape.num_elements(); ++output_index) {
+        const auto output_coordinates = coordinates_from_flat_index(output_index, output_shape.dims());
+        std::vector<std::size_t> input_coordinates(input_dims.size(), 0);
+        for (std::size_t output_axis = 0; output_axis < axes.size(); ++output_axis) {
+            input_coordinates[axes[output_axis]] = output_coordinates[output_axis];
+        }
+
+        const auto input_offset = byte_offset_from_coordinates(input_coordinates, input.strides_bytes());
+        std::memcpy(result_data.data() + output_index * element_size, input_data.data() + input_offset, element_size);
+    }
+
+    return result;
+}
+
+tensors::Tensor repeat_interleave(const tensors::TensorView& input, std::size_t dim, std::size_t repeats) {
+    if (dim >= input.tensor_info().shape.rank()) {
+        throw std::out_of_range("repeat_interleave dimension is out of bounds.");
+    }
+
+    checked_positive_size(repeats, "repeat_interleave repeats");
+
+    const auto& input_dims = input.tensor_info().shape.dims();
+    std::vector<std::int64_t> output_dims = input_dims;
+    const auto repeated_dim_size = checked_dim_to_size(input_dims[dim], "repeat_interleave dim size");
+    if (repeated_dim_size > std::numeric_limits<std::size_t>::max() / repeats) {
+        throw std::overflow_error("repeat_interleave output dimension overflowed.");
+    }
+    output_dims[dim] = checked_size_to_dim(repeated_dim_size * repeats, "repeat_interleave output dim");
+
+    const auto output_shape = tensors::Shape(std::move(output_dims));
+    auto result = detail::make_result_tensor("repeat_interleave_result", input.tensor_info().dtype, output_shape);
+    const auto element_size = tensors::element_size_bytes(input.tensor_info().dtype);
+    const auto input_data = input.data();
+    auto result_data = result.mutable_data();
+
+    for (std::size_t output_index = 0; output_index < output_shape.num_elements(); ++output_index) {
+        auto input_coordinates = coordinates_from_flat_index(output_index, output_shape.dims());
+        input_coordinates[dim] /= repeats;
+
+        const auto input_offset = byte_offset_from_coordinates(input_coordinates, input.strides_bytes());
+        std::memcpy(result_data.data() + output_index * element_size, input_data.data() + input_offset, element_size);
+    }
+
+    return result;
 }
 
 } // namespace cppinf::ops
