@@ -1,3 +1,4 @@
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -21,8 +22,11 @@ using ops::cast;
 using ops::matmul;
 using ops::mul;
 using ops::narrow;
+using ops::permute;
+using ops::repeat_interleave;
 using ops::reshape;
 using ops::rms_norm;
+using ops::scaled_causal_softmax_last_dim;
 using ops::silu;
 using ops::softmax_last_dim;
 using ops::squeeze;
@@ -153,6 +157,26 @@ TEST_F(OpsTest, GivenRank3Tensor_WhenTransposingLastTwoDims_ThenExpectedResultIs
     EXPECT_EQ(expected, transpose_last_two_dims(input.view()));
 }
 
+TEST_F(OpsTest, GivenRank3Tensor_WhenPermutingAxes_ThenExpectedResultIsReturned) {
+    // Hand-derived from moving input axes [a, b, c] to output axes [b, c, a].
+    const auto input = make_f32_tensor("input", {2, 2, 3},
+                                       {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+    const std::array<std::size_t, 3> axes = {1, 2, 0};
+    const auto expected = make_f32_tensor("permute_result", {2, 3, 2},
+                                          {1.0f, 7.0f, 2.0f, 8.0f, 3.0f, 9.0f, 4.0f, 10.0f, 5.0f, 11.0f, 6.0f, 12.0f});
+
+    EXPECT_EQ(expected, permute(input.view(), axes));
+}
+
+TEST_F(OpsTest, GivenTensor_WhenRepeatingInterleavedDimension_ThenExpectedResultIsReturned) {
+    // Hand-derived from repeating each dim-0 row twice.
+    const auto input = make_f32_tensor("input", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto expected =
+        make_f32_tensor("repeat_interleave_result", {4, 2}, {1.0f, 2.0f, 1.0f, 2.0f, 3.0f, 4.0f, 3.0f, 4.0f});
+
+    EXPECT_EQ(expected, repeat_interleave(input.view(), 0, 2));
+}
+
 TEST_F(OpsTest, GivenTensorView_WhenNarrowingFirstDimension_ThenSubspanIsReturned) {
     const auto input = make_f32_tensor("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
@@ -271,6 +295,18 @@ TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingSoftmaxLastDim_ThenExpect
         result.view(),
         {0.0883789062f, 0.0026702881f, 0.83984375f, 0.0688476562f, 0.88671875f, 0.0162353516f, 0.0017166138f, 0.09375f},
         1e-6f);
+}
+
+TEST_F(OpsTest, GivenAttentionScores_WhenApplyingScaledCausalSoftmax_ThenFuturePositionsAreMasked) {
+    // Hand-derived: row 0 masks the future key, row 1 is softmax([3, 4]).
+    const auto input = make_f32_tensor("input", {1, 2, 2}, {1.0f, 1000.0f, 3.0f, 4.0f});
+
+    const auto result = scaled_causal_softmax_last_dim(input.view(), 1.0f);
+
+    EXPECT_EQ(std::string("scaled_causal_softmax_last_dim_result"), result.tensor_info().name);
+    EXPECT_EQ(DType::F32, result.tensor_info().dtype);
+    EXPECT_EQ(Shape({1, 2, 2}), result.tensor_info().shape);
+    expect_float_values_near(result.view(), {1.0f, 0.0f, 0.2689414322f, 0.7310585976f}, 1e-6f);
 }
 
 TEST_F(OpsTest, GivenTorchOracleBf16Tensor_WhenApplyingRmsNorm_ThenExpectedValuesAreReturned) {
