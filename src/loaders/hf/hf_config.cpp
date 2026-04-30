@@ -4,9 +4,10 @@
 #include <limits>
 #include <stdexcept>
 
-#include "io/file.h"
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
+
+#include "io/file.h"
 
 namespace cppinf::loaders::hf {
 namespace detail {
