@@ -5,9 +5,10 @@
 #include <stdexcept>
 #include <utility>
 
-#include "io/file.h"
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
+
+#include "io/file.h"
 
 namespace cppinf::files {
 namespace detail {
