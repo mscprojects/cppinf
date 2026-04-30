@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -40,13 +41,18 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
 }
 
 tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, float scale) {
-    if (scores.tensor_info().shape.rank() != 2) {
-        throw std::invalid_argument("qwen_attention requires rank-2 attention score matrices.");
+    const auto rank = scores.tensor_info().shape.rank();
+    if (rank != 2 && rank != 3) {
+        throw std::invalid_argument("qwen_attention requires rank-2 or rank-3 attention score matrices.");
     }
 
     const auto& dims = scores.tensor_info().shape.dims();
-    const auto sequence_length = checked_positive_dim_to_size(dims[0], "qwen_attention sequence length");
-    const auto key_sequence_length = checked_positive_dim_to_size(dims[1], "qwen_attention key sequence length");
+    const auto batch_count =
+        rank == 3 ? checked_positive_dim_to_size(dims[0], "qwen_attention score batch count") : std::size_t{1};
+    const auto sequence_dim = rank == 3 ? std::size_t{1} : std::size_t{0};
+    const auto sequence_length = checked_positive_dim_to_size(dims[sequence_dim], "qwen_attention sequence length");
+    const auto key_sequence_length =
+        checked_positive_dim_to_size(dims[sequence_dim + 1], "qwen_attention key sequence length");
     if (sequence_length != key_sequence_length) {
         throw std::invalid_argument("qwen_attention requires square attention score matrices.");
     }
@@ -54,14 +60,17 @@ tensors::Tensor scale_and_causal_mask_scores(const tensors::TensorView& scores, 
     auto masked_scores = tensors::Tensor::zeros(
         tensors::make_result_tensor_info("qwen_attention_scores", tensors::DType::F32, scores.tensor_info().shape));
 
-    for (std::size_t query_index = 0; query_index < sequence_length; ++query_index) {
-        for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
-            const auto flat_index = query_index * key_sequence_length + key_index;
-            const auto value =
-                key_index <= query_index
-                    ? ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) * scale
-                    : -std::numeric_limits<float>::infinity();
-            ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index, value);
+    for (std::size_t batch_index = 0; batch_index < batch_count; ++batch_index) {
+        for (std::size_t query_index = 0; query_index < sequence_length; ++query_index) {
+            for (std::size_t key_index = 0; key_index < key_sequence_length; ++key_index) {
+                const auto matrix_index = query_index * key_sequence_length + key_index;
+                const auto flat_index = (batch_index * sequence_length * key_sequence_length) + matrix_index;
+                const auto value =
+                    key_index <= query_index
+                        ? ops::detail::load_float_value(scores.tensor_info().dtype, scores.data(), flat_index) * scale
+                        : -std::numeric_limits<float>::infinity();
+                ops::detail::store_float_value(tensors::DType::F32, masked_scores.mutable_data(), flat_index, value);
+            }
         }
     }
 
@@ -163,6 +172,108 @@ void validate_qwen_attention_inputs(const tensors::TensorView& hidden_states, co
                                num_attention_heads * head_dim);
 }
 
+tensors::Tensor make_grouped_query_batch(const tensors::TensorView& query, std::size_t query_head_begin,
+                                         std::size_t queries_per_key_value_head) {
+    const auto& dims = query.tensor_info().shape.dims();
+    const auto sequence_length = static_cast<std::size_t>(dims[0]);
+    const auto query_head_count = static_cast<std::size_t>(dims[1]);
+    const auto head_size = static_cast<std::size_t>(dims[2]);
+
+    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
+        "qwen_attention_query_batch", query.tensor_info().dtype,
+        tensors::Shape({static_cast<std::int64_t>(queries_per_key_value_head), dims[0], dims[2]})));
+    const auto element_size = tensors::element_size_bytes(query.tensor_info().dtype);
+    const auto head_bytes = head_size * element_size;
+    auto result_data = result.mutable_data();
+    const auto query_data = query.data();
+
+    for (std::size_t group_head_index = 0; group_head_index < queries_per_key_value_head; ++group_head_index) {
+        const auto query_head_index = query_head_begin + group_head_index;
+        for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
+            const auto source_offset = ((sequence_index * query_head_count) + query_head_index) * head_bytes;
+            const auto destination_offset = ((group_head_index * sequence_length) + sequence_index) * head_bytes;
+            std::memcpy(result_data.data() + destination_offset, query_data.data() + source_offset, head_bytes);
+        }
+    }
+
+    return result;
+}
+
+tensors::Tensor make_grouped_key_batch(const tensors::TensorView& key, std::size_t key_value_head_index,
+                                       std::size_t queries_per_key_value_head) {
+    const auto& dims = key.tensor_info().shape.dims();
+    const auto sequence_length = static_cast<std::size_t>(dims[0]);
+    const auto key_head_count = static_cast<std::size_t>(dims[1]);
+    const auto head_size = static_cast<std::size_t>(dims[2]);
+
+    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
+        "qwen_attention_key_batch", key.tensor_info().dtype,
+        tensors::Shape({static_cast<std::int64_t>(queries_per_key_value_head), dims[2], dims[0]})));
+    const auto element_size = tensors::element_size_bytes(key.tensor_info().dtype);
+    const auto key_data = key.data();
+    auto result_data = result.mutable_data();
+
+    for (std::size_t group_head_index = 0; group_head_index < queries_per_key_value_head; ++group_head_index) {
+        for (std::size_t head_index = 0; head_index < head_size; ++head_index) {
+            for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
+                const auto source_index =
+                    ((sequence_index * key_head_count + key_value_head_index) * head_size) + head_index;
+                const auto destination_index =
+                    ((group_head_index * head_size + head_index) * sequence_length) + sequence_index;
+                std::memcpy(result_data.data() + destination_index * element_size,
+                            key_data.data() + source_index * element_size, element_size);
+            }
+        }
+    }
+
+    return result;
+}
+
+tensors::Tensor make_grouped_value_batch(const tensors::TensorView& value, std::size_t key_value_head_index,
+                                         std::size_t queries_per_key_value_head) {
+    const auto& dims = value.tensor_info().shape.dims();
+    const auto sequence_length = static_cast<std::size_t>(dims[0]);
+    const auto value_head_count = static_cast<std::size_t>(dims[1]);
+    const auto head_size = static_cast<std::size_t>(dims[2]);
+
+    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(
+        "qwen_attention_value_batch", value.tensor_info().dtype,
+        tensors::Shape({static_cast<std::int64_t>(queries_per_key_value_head), dims[0], dims[2]})));
+    const auto element_size = tensors::element_size_bytes(value.tensor_info().dtype);
+    const auto head_bytes = head_size * element_size;
+    const auto value_data = value.data();
+    auto result_data = result.mutable_data();
+
+    for (std::size_t group_head_index = 0; group_head_index < queries_per_key_value_head; ++group_head_index) {
+        for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
+            const auto source_offset = ((sequence_index * value_head_count) + key_value_head_index) * head_bytes;
+            const auto destination_offset = ((group_head_index * sequence_length) + sequence_index) * head_bytes;
+            std::memcpy(result_data.data() + destination_offset, value_data.data() + source_offset, head_bytes);
+        }
+    }
+
+    return result;
+}
+
+void copy_grouped_attention_result(const tensors::TensorView& group_result, std::size_t query_head_begin,
+                                   std::size_t query_head_count, std::span<std::byte> result_data) {
+    const auto& dims = group_result.tensor_info().shape.dims();
+    const auto queries_per_key_value_head = static_cast<std::size_t>(dims[0]);
+    const auto sequence_length = static_cast<std::size_t>(dims[1]);
+    const auto head_size = static_cast<std::size_t>(dims[2]);
+    const auto head_bytes = head_size * tensors::element_size_bytes(group_result.tensor_info().dtype);
+    const auto group_data = group_result.data();
+
+    for (std::size_t group_head_index = 0; group_head_index < queries_per_key_value_head; ++group_head_index) {
+        const auto query_head_index = query_head_begin + group_head_index;
+        for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
+            const auto source_offset = ((group_head_index * sequence_length) + sequence_index) * head_bytes;
+            const auto destination_offset = ((sequence_index * query_head_count) + query_head_index) * head_bytes;
+            std::memcpy(result_data.data() + destination_offset, group_data.data() + source_offset, head_bytes);
+        }
+    }
+}
+
 tensors::Tensor fused_causal_attention(const tensors::TensorView& query, const tensors::TensorView& key,
                                        const tensors::TensorView& value) {
     if (query.tensor_info().shape.rank() != 3 || key.tensor_info().shape.rank() != 3 ||
@@ -201,38 +312,25 @@ tensors::Tensor fused_causal_attention(const tensors::TensorView& query, const t
 
     const auto score_scale = 1.0f / std::sqrt(static_cast<float>(query_head_size));
     const auto queries_per_key_value_head = query_head_count / key_head_count;
-    const auto element_size = tensors::element_size_bytes(query.tensor_info().dtype);
-    const auto head_bytes = query_head_size * element_size;
-
     auto result = tensors::Tensor::zeros(
         tensors::make_result_tensor_info("qwen_attention_attention_output", query.tensor_info().dtype,
                                          tensors::Shape({query_dims[0], query_dims[1], query_dims[2]})));
     auto result_data = result.mutable_data();
 
     for (std::size_t key_value_head_index = 0; key_value_head_index < key_head_count; ++key_value_head_index) {
-        const auto key_head = ops::squeeze(ops::narrow(key, 1, key_value_head_index, 1), 1);
-        const auto value_head = ops::squeeze(ops::narrow(value, 1, key_value_head_index, 1), 1);
-        const auto transposed_key = ops::transpose_2d(key_head);
         const auto query_head_begin = key_value_head_index * queries_per_key_value_head;
-        const auto query_head_end = query_head_begin + queries_per_key_value_head;
 
-        for (std::size_t query_head_index = query_head_begin; query_head_index < query_head_end; ++query_head_index) {
-            const auto query_head = ops::squeeze(ops::narrow(query, 1, query_head_index, 1), 1);
-            const auto attention_scores =
-                ops::matmul(query_head, transposed_key.view(), ops::MatmulOptions{.output_dtype = tensors::DType::F32});
-            const auto masked_scores = scale_and_causal_mask_scores(attention_scores.view(), score_scale);
-            const auto probabilities = ops::softmax_last_dim(masked_scores.view());
-            auto head_result = ops::matmul(probabilities.view(), value_head);
-            head_result = ops::detail::maybe_cast_result(std::move(head_result), query.tensor_info().dtype,
-                                                         "qwen_attention_attention_output_head");
-
-            for (std::size_t sequence_index = 0; sequence_index < sequence_length; ++sequence_index) {
-                const auto destination_offset = ((sequence_index * query_head_count) + query_head_index) * head_bytes;
-                const auto source_offset = sequence_index * head_bytes;
-                std::memcpy(result_data.data() + destination_offset, head_result.data().data() + source_offset,
-                            head_bytes);
-            }
-        }
+        const auto query_batch = make_grouped_query_batch(query, query_head_begin, queries_per_key_value_head);
+        const auto key_batch = make_grouped_key_batch(key, key_value_head_index, queries_per_key_value_head);
+        const auto value_batch = make_grouped_value_batch(value, key_value_head_index, queries_per_key_value_head);
+        const auto attention_scores =
+            ops::matmul(query_batch.view(), key_batch.view(), ops::MatmulOptions{.output_dtype = tensors::DType::F32});
+        const auto masked_scores = scale_and_causal_mask_scores(attention_scores.view(), score_scale);
+        const auto probabilities = ops::softmax_last_dim(masked_scores.view());
+        auto group_result = ops::matmul(probabilities.view(), value_batch.view());
+        group_result = ops::detail::maybe_cast_result(std::move(group_result), query.tensor_info().dtype,
+                                                      "qwen_attention_attention_output_group");
+        copy_grouped_attention_result(group_result.view(), query_head_begin, query_head_count, result_data);
     }
 
     return result;
