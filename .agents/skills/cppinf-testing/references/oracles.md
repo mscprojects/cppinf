@@ -30,6 +30,10 @@ Copy the generated result into the C++ test and keep the generator file checked 
 4. Commit the literals, expected values, and the generator script.
 5. Add one seeded rounded-random oracle case only if extra coverage is useful.
 
+For model or block-level checks, prefer a maintained reference implementation such as Hugging Face modules over a
+hand-written Python mirror of the C++ code. Use a local mirror only when no suitable reference implementation exists,
+and state that limitation in the generator.
+
 ## Random oracle guidance
 
 Random inputs are useful for supplemental coverage, but keep them deterministic and readable:

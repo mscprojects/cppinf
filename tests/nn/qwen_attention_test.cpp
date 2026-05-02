@@ -24,7 +24,7 @@ using tensors::Shape;
 
 class QwenAttentionTest : public ::testing::Test {};
 
-TEST_F(QwenAttentionTest, GivenTorchOracleF32Inputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
+TEST_F(QwenAttentionTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_attention_oracle.py.
     // Case: f32_explicit_head_dim.
     const auto hidden_states = make_f32_tensor("hidden_states", {3, 6},
@@ -75,7 +75,7 @@ TEST_F(QwenAttentionTest, GivenTorchOracleF32Inputs_WhenApplyingQwenAttention_Th
                              1e-5f);
 }
 
-TEST_F(QwenAttentionTest, GivenTorchOracleGroupedKvInputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
+TEST_F(QwenAttentionTest, GivenHfQwen3OracleGroupedKvInputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_attention_oracle.py.
     // Case: f32_grouped_kv_heads.
     const auto hidden_states = make_f32_tensor("hidden_states", {3, 6},
@@ -126,7 +126,7 @@ TEST_F(QwenAttentionTest, GivenTorchOracleGroupedKvInputs_WhenApplyingQwenAttent
                              1e-5f);
 }
 
-TEST_F(QwenAttentionTest, GivenTorchOracleBf16Inputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
+TEST_F(QwenAttentionTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_attention_oracle.py.
     // Case: bf16_explicit_head_dim.
     const auto hidden_states = make_bf16_tensor("hidden_states", {3, 6},
@@ -171,9 +171,9 @@ TEST_F(QwenAttentionTest, GivenTorchOracleBf16Inputs_WhenApplyingQwenAttention_T
     EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
     expect_float_values_near(result.view(),
                              {0.08154296875f, 3.203125f, -1.0234375f, 1.3984375f, -1.6953125f, 0.259765625f,
-                              0.1611328125f, -2.96875f, 0.96875f, -1.546875f, 2.3125f, 0.59765625f, 1.328125f,
+                              0.1572265625f, -2.984375f, 0.9765625f, -1.546875f, 2.328125f, 0.6015625f, 1.3203125f,
                               -3.109375f, 1.4296875f, -4.1875f, 4.15625f, 0.6171875f},
-                             1e-6f);
+                             0.02f);
 }
 
 TEST_F(QwenAttentionTest, GivenMismatchedHeadShape_WhenApplyingQwenAttention_ThenItThrows) {

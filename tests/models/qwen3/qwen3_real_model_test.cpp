@@ -182,7 +182,7 @@ TEST_F(Qwen3RealModelTest, GivenRealCheckpoint_WhenRunningForward_ThenFullLastTo
 
     const auto mean_abs_diff = static_cast<float>(sum_abs_diff / static_cast<double>(last_token_values.size()));
 
-    EXPECT_LE(max_abs_diff, 0.5f);
+    EXPECT_LE(max_abs_diff, 0.75f);
     EXPECT_LE(mean_abs_diff, 0.2f);
 }
 

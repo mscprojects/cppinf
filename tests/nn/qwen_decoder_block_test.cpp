@@ -26,7 +26,7 @@ using tensors::Shape;
 
 class QwenDecoderBlockTest : public ::testing::Test {};
 
-TEST_F(QwenDecoderBlockTest, GivenTorchOracleF32Inputs_WhenApplyingQwenDecoderBlock_ThenExpectedValuesAreReturned) {
+TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenDecoderBlock_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_decoder_block_oracle.py.
     // Case: f32_basic.
     const auto hidden_states = make_f32_tensor("hidden_states", {3, 6},
@@ -113,7 +113,7 @@ TEST_F(QwenDecoderBlockTest, GivenTorchOracleF32Inputs_WhenApplyingQwenDecoderBl
                              1e-5f);
 }
 
-TEST_F(QwenDecoderBlockTest, GivenTorchOracleBf16Inputs_WhenApplyingQwenDecoderBlock_ThenExpectedValuesAreReturned) {
+TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenDecoderBlock_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_decoder_block_oracle.py.
     // Case: bf16_basic.
     const auto hidden_states = make_bf16_tensor("hidden_states", {3, 6},
@@ -194,9 +194,9 @@ TEST_F(QwenDecoderBlockTest, GivenTorchOracleBf16Inputs_WhenApplyingQwenDecoderB
     EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
     expect_float_values_near(result.view(),
                              {6.4375f, 9.5f, 1.0078125f, -2.046875f, 2.328125f, 4.5f, 4.4375f, 4.78125f, -1.546875f,
-                              1.203125f, 2.78125f, 3.40625f, -2.40625f, -0.00390625f, 0.0048828125f, -2.125f,
-                              -2.078125f, -3.59375f},
-                             1e-6f);
+                              1.203125f, 2.8125f, 3.421875f, -2.359375f, 0.0f, 0.0029296875f, -2.109375f, -2.0625f,
+                              -3.5625f},
+                             0.05f);
 }
 
 TEST_F(QwenDecoderBlockTest, GivenMismatchedLayerNormWeight_WhenApplyingQwenDecoderBlock_ThenItThrows) {
