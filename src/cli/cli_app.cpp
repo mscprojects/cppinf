@@ -1,5 +1,6 @@
 #include "cli/cli_app.h"
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
@@ -125,8 +126,9 @@ std::string run_hf_generation(const RunHfOptions& options, const OutputWriter& o
     }
 
     const auto eos_token_id = tokenizer.eos_token_id();
+    auto cache = model.make_cache();
+    auto logits = model.forward_cached(token_ids, cache);
     for (std::size_t step = 0; step < options.max_new_tokens; ++step) {
-        const auto logits = model.forward(token_ids);
         const auto next_token_id = select_argmax_token_id(logits);
         if (eos_token_id.has_value() && next_token_id == *eos_token_id) {
             break;
@@ -136,6 +138,11 @@ std::string run_hf_generation(const RunHfOptions& options, const OutputWriter& o
         auto next_decoded_text = tokenizer.decode(token_ids);
         stream_generated_text(output_writer, decoded_text, next_decoded_text);
         decoded_text = std::move(next_decoded_text);
+
+        if (step + 1 < options.max_new_tokens) {
+            const std::array<std::int64_t, 1> current_token_ids = {next_token_id};
+            logits = model.forward_cached(current_token_ids, cache);
+        }
     }
 
     return decoded_text;

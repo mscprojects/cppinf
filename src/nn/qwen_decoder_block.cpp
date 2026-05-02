@@ -79,6 +79,16 @@ tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, con
                                    std::size_t num_attention_heads, std::size_t num_key_value_heads,
                                    std::size_t head_dim, float norm_epsilon, std::size_t sequence_position_offset,
                                    float rope_base) {
+    QwenDecoderBlockCache cache;
+    return qwen_decoder_block_with_cache(hidden_states, weights, cache, num_attention_heads, num_key_value_heads,
+                                         head_dim, norm_epsilon, sequence_position_offset, rope_base);
+}
+
+tensors::Tensor qwen_decoder_block_with_cache(const tensors::TensorView& hidden_states,
+                                              const QwenDecoderBlockWeights& weights, QwenDecoderBlockCache& cache,
+                                              std::size_t num_attention_heads, std::size_t num_key_value_heads,
+                                              std::size_t head_dim, float norm_epsilon,
+                                              std::size_t sequence_position_offset, float rope_base) {
     validate_qwen_decoder_block_inputs(hidden_states, weights, norm_epsilon, rope_base);
 
     // RMSNorm prepares the residual stream [seq, hidden] for attention without changing its outer shape.
@@ -87,8 +97,8 @@ tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, con
     // Self-attention mixes information across the visible prefix and returns another [seq, hidden] tensor, which we
     // add back to the residual stream.
     const auto attention_output =
-        qwen_attention(attention_input.view(), weights.attention, num_attention_heads, num_key_value_heads, head_dim,
-                       norm_epsilon, sequence_position_offset, rope_base);
+        qwen_attention_with_cache(attention_input.view(), weights.attention, cache.attention, num_attention_heads,
+                                  num_key_value_heads, head_dim, norm_epsilon, sequence_position_offset, rope_base);
     const auto attention_residual = ops::add(hidden_states, attention_output.view());
 
     // A second RMSNorm prepares the post-attention residual for the feed-forward branch.

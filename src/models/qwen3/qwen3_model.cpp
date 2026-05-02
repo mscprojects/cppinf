@@ -151,18 +151,35 @@ Qwen3Model Qwen3Model::from_dir(const std::filesystem::path& model_dir) {
 }
 
 tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) const {
+    auto cache = make_cache();
+    return forward_cached(token_ids, cache);
+}
+
+Qwen3ModelCache Qwen3Model::make_cache() const {
+    return Qwen3ModelCache{
+        .layers = std::vector<nn::QwenDecoderBlockCache>(config_.num_hidden_layers),
+        .sequence_length = 0,
+    };
+}
+
+tensors::Tensor Qwen3Model::forward_cached(std::span<const std::int64_t> token_ids, Qwen3ModelCache& cache) const {
+    if (cache.layers.size() != config_.num_hidden_layers) {
+        throw std::invalid_argument("Qwen3Model cache must have one entry per decoder layer.");
+    }
+
     // Look up one learned embedding vector per token id, turning token ids [seq] into hidden states [seq, hidden].
     auto hidden_states = embedding_lookup(weights_.tensor_view("model.embed_tokens.weight"), token_ids);
 
     // Run the transformer stack one decoder block at a time. Each block keeps the outer shape [seq, hidden], while
-    // causal attention mixes information across earlier tokens and the MLP refines each position independently. This
-    // path recomputes the full sequence from scratch, so positions always start at 0.
+    // causal attention mixes information across the cached prefix and the MLP refines each position independently.
     for (std::size_t layer_index = 0; layer_index < config_.num_hidden_layers; ++layer_index) {
         const auto layer_weights = make_layer_weights(weights_, layer_index);
-        hidden_states = nn::qwen_decoder_block(hidden_states.view(), layer_weights, config_.num_attention_heads,
-                                               config_.num_key_value_heads, config_.head_dim, config_.rms_norm_eps, 0,
-                                               config_.rope_theta);
+        hidden_states = nn::qwen_decoder_block_with_cache(
+            hidden_states.view(), layer_weights, cache.layers[layer_index], config_.num_attention_heads,
+            config_.num_key_value_heads, config_.head_dim, config_.rms_norm_eps, cache.sequence_length,
+            config_.rope_theta);
     }
+    cache.sequence_length += token_ids.size();
 
     // Apply the final RMSNorm before the language-model head, and keep the shape [seq, hidden].
     const auto normalized_hidden_states =
