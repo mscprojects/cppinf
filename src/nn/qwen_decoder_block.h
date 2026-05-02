@@ -16,10 +16,6 @@ struct QwenDecoderBlockWeights {
     QwenMlpWeights mlp;
 };
 
-struct QwenDecoderBlockCache {
-    QwenAttentionCache attention;
-};
-
 // Applies one Qwen decoder block to rank-2 [sequence, hidden] hidden states.
 // Uses pre-norm residual paths, explicit head_dim, a temporary empty cache, and keeps the public tensor dtype.
 tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, const QwenDecoderBlockWeights& weights,

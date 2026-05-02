@@ -309,7 +309,7 @@ TEST_F(Qwen3ModelTest, GivenTinyBf16Checkpoint_WhenRunningCachedForward_ThenLast
     write_tiny_model_dir();
 
     const auto model = Qwen3Model::from_dir(model_dir());
-    auto cache = model.make_cache();
+    auto cache = model.make_cache(4);
     const std::vector<std::int64_t> prompt_token_ids{1, 5, 3};
     const std::vector<std::int64_t> next_token_id{2};
 

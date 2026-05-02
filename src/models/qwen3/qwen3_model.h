@@ -25,8 +25,8 @@ class Qwen3Model {
     // Requires tied word embeddings and uses a temporary empty cache. Output dtype matches the loaded checkpoint dtype.
     tensors::Tensor forward(std::span<const std::int64_t> token_ids) const;
 
-    // Creates an empty per-layer cache for incremental decoding.
-    Qwen3ModelCache make_cache() const;
+    // Creates an empty per-layer cache with storage for up to max_sequence_length tokens.
+    Qwen3ModelCache make_cache(std::size_t max_sequence_length) const;
 
     // Runs token ids through the model while appending each layer's K/V tensors to cache.
     // The next call must pass tokens that immediately follow the cached prefix.
