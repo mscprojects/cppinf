@@ -305,6 +305,31 @@ TEST_F(Qwen3ModelTest, GivenTinyBf16Checkpoint_WhenRunningForward_ThenExpectedLo
         0.05f);
 }
 
+TEST_F(Qwen3ModelTest, GivenTinyBf16Checkpoint_WhenRunningCachedForward_ThenLastTokenMatchesFullForward) {
+    write_tiny_model_dir();
+
+    const auto model = Qwen3Model::from_dir(model_dir());
+    auto cache = model.make_cache();
+    const std::vector<std::int64_t> prompt_token_ids{1, 5, 3};
+    const std::vector<std::int64_t> next_token_id{2};
+
+    const auto prompt_logits = model.forward_cached(prompt_token_ids, cache);
+    const auto next_logits = model.forward_cached(next_token_id, cache);
+
+    EXPECT_EQ(DType::BF16, prompt_logits.tensor_info().dtype);
+    EXPECT_EQ(Shape({3, 13}), prompt_logits.tensor_info().shape);
+    EXPECT_EQ(DType::BF16, next_logits.tensor_info().dtype);
+    EXPECT_EQ(Shape({1, 13}), next_logits.tensor_info().shape);
+    EXPECT_EQ(std::size_t{4}, cache.sequence_length);
+    ASSERT_EQ(std::size_t{2}, cache.layers.size());
+    EXPECT_EQ(std::size_t{4}, cache.layers[0].attention.sequence_length);
+    EXPECT_EQ(std::size_t{4}, cache.layers[1].attention.sequence_length);
+    expect_float_values_near(next_logits.view(),
+                             {-1.640625f, -1.046875f, 0.66015625f, -2.0625f, 0.65234375f, -1.328125f, 0.73046875f,
+                              0.60546875f, -0.32421875f, 2.296875f, -1.75f, -0.29296875f, 0.53515625f},
+                             0.05f);
+}
+
 TEST_F(Qwen3ModelTest, GivenUntiedEmbeddings_WhenLoadingModel_ThenItThrows) {
     write_tiny_model_dir(false);
 
