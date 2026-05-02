@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <optional>
 
+#include "nn/qwen_cache.h"
 #include "tensors/tensor.h"
 #include "tensors/tensor_view.h"
 
@@ -15,13 +15,6 @@ struct QwenAttentionWeights {
     tensors::TensorView k_norm_weight;
     tensors::TensorView v_proj_weight;
     tensors::TensorView o_proj_weight;
-};
-
-struct QwenAttentionCache {
-    std::optional<tensors::Tensor> key;
-    std::optional<tensors::Tensor> value;
-    std::size_t sequence_length{};
-    std::size_t sequence_position_offset{};
 };
 
 // Applies bias-free Qwen attention to rank-2 [sequence, hidden] hidden states with projection and q/k norm weights.

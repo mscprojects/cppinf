@@ -5,16 +5,15 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include <fmt/format.h>
 
+#include "nn/qwen_cache.h"
 #include "nn/rope.h"
 #include "ops/matmul.h"
 #include "ops/nn_ops.h"
@@ -40,14 +39,6 @@ std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view fiel
     }
 
     return value;
-}
-
-std::int64_t checked_size_to_dim(std::size_t value, std::string_view field_name) {
-    if (value > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
-        throw std::overflow_error(fmt::format("{} does not fit in int64_t.", field_name));
-    }
-
-    return static_cast<std::int64_t>(value);
 }
 
 tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight) {
@@ -147,55 +138,6 @@ void validate_qwen_attention_inputs(const tensors::TensorView& hidden_states, co
                                num_attention_heads * head_dim);
 }
 
-tensors::Tensor append_sequence_tensor(const std::optional<tensors::Tensor>& cached, const tensors::TensorView& current,
-                                       std::size_t cached_sequence_length, std::string_view result_name) {
-    if (current.tensor_info().shape.rank() != 3) {
-        throw std::invalid_argument(fmt::format("{} requires a rank-3 current tensor.", result_name));
-    }
-
-    if (!current.is_contiguous()) {
-        throw std::invalid_argument(fmt::format("{} requires a contiguous current tensor.", result_name));
-    }
-
-    const auto& current_dims = current.tensor_info().shape.dims();
-    const auto current_sequence_length =
-        checked_positive_dim_to_size(current_dims[0], fmt::format("{} sequence", result_name));
-    const auto total_sequence_length = cached_sequence_length + current_sequence_length;
-    if (total_sequence_length < cached_sequence_length) {
-        throw std::overflow_error(fmt::format("{} sequence length overflowed.", result_name));
-    }
-
-    std::vector<std::int64_t> result_dims = current_dims;
-    result_dims[0] = checked_size_to_dim(total_sequence_length, fmt::format("{} total sequence", result_name));
-    auto result = tensors::Tensor::zeros(tensors::make_result_tensor_info(result_name, current.tensor_info().dtype,
-                                                                          tensors::Shape(std::move(result_dims))));
-
-    if (cached.has_value()) {
-        if (!cached->view().is_contiguous()) {
-            throw std::invalid_argument(fmt::format("{} requires a contiguous cached tensor.", result_name));
-        }
-
-        const auto& cached_info = cached->tensor_info();
-        const auto& cached_dims = cached_info.shape.dims();
-        if (cached_info.dtype != current.tensor_info().dtype || cached_info.shape.rank() != 3 ||
-            checked_positive_dim_to_size(cached_dims[0], fmt::format("{} cached sequence", result_name)) !=
-                cached_sequence_length ||
-            cached_dims[1] != current_dims[1] || cached_dims[2] != current_dims[2]) {
-            throw std::invalid_argument(
-                fmt::format("{} cache tensor shape does not match current tensor.", result_name));
-        }
-
-        std::memcpy(result.mutable_data().data(), cached->data().data(), cached->byte_size());
-    }
-
-    const auto destination_offset =
-        cached_sequence_length * checked_positive_dim_to_size(current_dims[1], fmt::format("{} heads", result_name)) *
-        checked_positive_dim_to_size(current_dims[2], fmt::format("{} head dim", result_name)) *
-        tensors::element_size_bytes(current.tensor_info().dtype);
-    std::memcpy(result.mutable_data().data() + destination_offset, current.data().data(), current.byte_size());
-    return result;
-}
-
 tensors::Tensor scaled_position_causal_softmax_last_dim(const tensors::TensorView& input, float scale,
                                                         std::size_t query_position_offset,
                                                         std::size_t key_position_offset) {
@@ -255,29 +197,6 @@ tensors::Tensor scaled_position_causal_softmax_last_dim(const tensors::TensorVie
     }
 
     return result;
-}
-
-void append_to_cache(QwenAttentionCache& cache, const tensors::TensorView& key, const tensors::TensorView& value,
-                     std::size_t sequence_position_offset) {
-    if (cache.sequence_length == 0) {
-        cache.sequence_position_offset = sequence_position_offset;
-    } else if (sequence_position_offset != cache.sequence_position_offset + cache.sequence_length) {
-        throw std::invalid_argument("qwen_attention cache requires contiguous sequence positions.");
-    }
-
-    const auto sequence_length =
-        checked_positive_dim_to_size(key.tensor_info().shape.dims()[0], "qwen_attention cached append sequence");
-    if (checked_positive_dim_to_size(value.tensor_info().shape.dims()[0], "qwen_attention cached value sequence") !=
-        sequence_length) {
-        throw std::invalid_argument("qwen_attention cache requires matching key/value append sequence lengths.");
-    }
-
-    auto cached_key = append_sequence_tensor(cache.key, key, cache.sequence_length, "qwen_attention_cached_key");
-    auto cached_value =
-        append_sequence_tensor(cache.value, value, cache.sequence_length, "qwen_attention_cached_value");
-    cache.key = std::move(cached_key);
-    cache.value = std::move(cached_value);
-    cache.sequence_length += sequence_length;
 }
 
 tensors::Tensor fused_causal_attention(const tensors::TensorView& query, const tensors::TensorView& key,
@@ -398,11 +317,13 @@ tensors::Tensor qwen_attention_with_cache(const tensors::TensorView& hidden_stat
     const auto normalized_key = ops::rms_norm(key_heads, weights.k_norm_weight, norm_epsilon);
     const auto rotated_query = apply_rope(normalized_query.view(), sequence_position_offset, rope_base, 0);
     const auto rotated_key = apply_rope(normalized_key.view(), sequence_position_offset, rope_base, 0);
-    append_to_cache(cache, rotated_key.view(), value_heads, sequence_position_offset);
+    append_to_qwen_attention_cache(cache, rotated_key.view(), value_heads, sequence_position_offset);
 
     // Build token context with causal attention, then flatten [seq, q_heads, head_dim] back to [seq, q_heads *
     // head_dim] for the output projection.
-    const auto attention_output = fused_causal_attention(rotated_query.view(), cache.key->view(), cache.value->view(),
+    const auto cached_key = qwen_attention_cache_key_view(cache);
+    const auto cached_value = qwen_attention_cache_value_view(cache);
+    const auto attention_output = fused_causal_attention(rotated_query.view(), cached_key, cached_value,
                                                          sequence_position_offset, cache.sequence_position_offset);
     const auto packed_attention =
         ops::reshape(attention_output.view(), tensors::Shape({query_projection.tensor_info().shape.dims()[0],

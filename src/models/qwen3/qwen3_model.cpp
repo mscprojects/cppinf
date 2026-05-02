@@ -151,13 +151,29 @@ Qwen3Model Qwen3Model::from_dir(const std::filesystem::path& model_dir) {
 }
 
 tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) const {
-    auto cache = make_cache();
+    auto cache = make_cache(token_ids.size());
     return forward_cached(token_ids, cache);
 }
 
-Qwen3ModelCache Qwen3Model::make_cache() const {
+Qwen3ModelCache Qwen3Model::make_cache(std::size_t max_sequence_length) const {
+    if (max_sequence_length == 0) {
+        throw std::invalid_argument("Qwen3Model cache requires a non-zero max sequence length.");
+    }
+
+    const auto dtype = weights_.tensor_view("model.embed_tokens.weight").tensor_info().dtype;
+    std::vector<nn::QwenDecoderBlockCache> layers;
+    layers.reserve(config_.num_hidden_layers);
+    for (std::size_t layer_index = 0; layer_index < config_.num_hidden_layers; ++layer_index) {
+        layers.push_back(nn::QwenDecoderBlockCache{
+            .attention =
+                nn::make_qwen_attention_cache(layer_tensor_name(layer_index, "self_attn.cache.key"),
+                                              layer_tensor_name(layer_index, "self_attn.cache.value"), dtype,
+                                              max_sequence_length, config_.num_key_value_heads, config_.head_dim),
+        });
+    }
+
     return Qwen3ModelCache{
-        .layers = std::vector<nn::QwenDecoderBlockCache>(config_.num_hidden_layers),
+        .layers = std::move(layers),
         .sequence_length = 0,
     };
 }

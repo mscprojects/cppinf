@@ -130,6 +130,8 @@ set(CPPINF_SOURCES
     src/nn/qwen_decoder_block.h
     src/nn/qwen_attention.cpp
     src/nn/qwen_attention.h
+    src/nn/qwen_cache.cpp
+    src/nn/qwen_cache.h
     src/nn/qwen_mlp.cpp
     src/nn/qwen_mlp.h
     src/nn/rope.cpp
