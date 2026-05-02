@@ -218,7 +218,8 @@ TEST_F(CliAppTest, GivenInvalidArguments_WhenRunning_ThenUsageIsReturned) {
         .output = "Usage:\n"
                   "  cppinf\n"
                   "  cppinf inspect hf <model-dir> [--all] [--limit <count>]\n"
-                  "  cppinf run hf <model-dir> --prompt <text> [--max-new-tokens <count>]\n",
+                  "  cppinf run hf <model-dir> --prompt <text> [--max-new-tokens <count>] "
+                  "[--temperature <value>]\n",
     };
 
     EXPECT_EQ(expected, run(args));
@@ -267,6 +268,18 @@ TEST_F(CliAppTest, GivenRunHfArguments_WhenGeneratingGreedyTokens_ThenPromptIsCo
     write_tiny_generation_model_dir();
     const auto model_dir_path = model_dir().string();
     const std::string_view args[] = {"run", "hf", model_dir_path, "--prompt", "A", "--max-new-tokens", "1"};
+
+    const auto result = run(args);
+
+    EXPECT_EQ(0, result.exit_code);
+    EXPECT_EQ("AB\n", result.output);
+}
+
+TEST_F(CliAppTest, GivenRunHfArgumentsWithZeroTemperature_WhenGenerating_ThenGreedyTokenIsReturned) {
+    write_tiny_generation_model_dir();
+    const auto model_dir_path = model_dir().string();
+    const std::string_view args[] = {"run",           "hf", model_dir_path, "--prompt", "A", "--max-new-tokens", "1",
+                                     "--temperature", "0"};
 
     const auto result = run(args);
 
