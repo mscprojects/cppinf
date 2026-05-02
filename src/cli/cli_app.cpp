@@ -177,8 +177,15 @@ std::string run_hf_generation(const RunHfOptions& options, const OutputWriter& o
     std::random_device random_device;
     std::mt19937 random_engine(random_device());
     auto cache = model.make_cache();
-    auto logits = model.forward_cached(token_ids, cache);
+
+    // Cached decoding only runs tokens that have not been seen before: first the whole prompt, then one generated token
+    // per step. The cache holds the K/V tensors for all earlier tokens.
+    auto pending_token_ids = std::span<const std::int64_t>(token_ids);
+
+    // A span does not own storage, so keep a stable one-token buffer for generated tokens after the prompt prefill.
+    std::array<std::int64_t, 1> generated_token_buffer{};
     for (std::size_t step = 0; step < options.max_new_tokens; ++step) {
+        const auto logits = model.forward_cached(pending_token_ids, cache);
         const auto next_token_id = sample_token_id(logits, options.temperature, random_engine);
         if (eos_token_id.has_value() && next_token_id == *eos_token_id) {
             break;
@@ -189,10 +196,9 @@ std::string run_hf_generation(const RunHfOptions& options, const OutputWriter& o
         stream_generated_text(output_writer, decoded_text, next_decoded_text);
         decoded_text = std::move(next_decoded_text);
 
-        if (step + 1 < options.max_new_tokens) {
-            const std::array<std::int64_t, 1> current_token_ids = {next_token_id};
-            logits = model.forward_cached(current_token_ids, cache);
-        }
+        // The generated token becomes the only new model input on the next iteration, because the prefix is cached.
+        generated_token_buffer[0] = next_token_id;
+        pending_token_ids = std::span<const std::int64_t>(generated_token_buffer);
     }
 
     return decoded_text;
