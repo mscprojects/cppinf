@@ -1,10 +1,13 @@
 #include "cli/cli_app.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <optional>
+#include <random>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
@@ -30,6 +33,7 @@ struct RunHfOptions {
     std::filesystem::path model_dir;
     std::string prompt;
     std::size_t max_new_tokens{32};
+    float temperature{};
 };
 
 std::vector<std::string> to_owned_args(std::span<const std::string_view> args) {
@@ -47,7 +51,8 @@ std::string usage_text() {
     return fmt::format("Usage:\n"
                        "  cppinf\n"
                        "  cppinf inspect hf <model-dir> [--all] [--limit <count>]\n"
-                       "  cppinf run hf <model-dir> --prompt <text> [--max-new-tokens <count>]\n");
+                       "  cppinf run hf <model-dir> --prompt <text> [--max-new-tokens <count>] "
+                       "[--temperature <value>]\n");
 }
 
 CliResult invalid_usage() {
@@ -95,6 +100,49 @@ std::int64_t select_argmax_token_id(const tensors::Tensor& logits) {
     return best_token_id;
 }
 
+std::int64_t sample_token_id(const tensors::Tensor& logits, float temperature, std::mt19937& random_engine) {
+    if (logits.tensor_info().shape.rank() != 2) {
+        throw std::invalid_argument("CLI generation requires rank-2 logits.");
+    }
+
+    if (!std::isfinite(temperature) || temperature < 0.0f) {
+        throw std::invalid_argument("run hf requires a non-negative finite temperature.");
+    }
+
+    // Temperature 0 keeps generation deterministic by selecting the largest last-token logit instead of sampling.
+    if (temperature == 0.0f) {
+        return select_argmax_token_id(logits);
+    }
+
+    // Only the final sequence row matters for autoregressive decoding, it predicts the next token distribution.
+    const auto& dims = logits.tensor_info().shape.dims();
+    const auto sequence_length = checked_positive_dim_to_size(dims[0], "logits sequence length");
+    const auto vocab_size = checked_positive_dim_to_size(dims[1], "logits vocab size");
+    const auto last_row_offset = (sequence_length - 1) * vocab_size;
+
+    // Divide logits by temperature before softmax: lower temperatures sharpen probabilities, higher temperatures
+    // flatten them. Subtract the max scaled logit so exp() stays numerically stable.
+    auto max_scaled_logit = -std::numeric_limits<float>::infinity();
+    for (std::size_t token_index = 0; token_index < vocab_size; ++token_index) {
+        const auto logit =
+            ops::detail::load_float_value(logits.tensor_info().dtype, logits.data(), last_row_offset + token_index);
+        max_scaled_logit = std::max(max_scaled_logit, logit / temperature);
+    }
+
+    std::vector<double> weights;
+    weights.reserve(vocab_size);
+    for (std::size_t token_index = 0; token_index < vocab_size; ++token_index) {
+        const auto logit =
+            ops::detail::load_float_value(logits.tensor_info().dtype, logits.data(), last_row_offset + token_index);
+        weights.push_back(std::exp(static_cast<double>(logit / temperature - max_scaled_logit)));
+    }
+
+    // discrete_distribution normalizes positive weights internally, so the exponentials can be used as softmax weights
+    // without explicitly dividing by their sum.
+    std::discrete_distribution<std::size_t> distribution(weights.begin(), weights.end());
+    return static_cast<std::int64_t>(distribution(random_engine));
+}
+
 void stream_generated_text(const OutputWriter& output_writer, std::string_view previous_text,
                            std::string_view current_text) {
     if (!output_writer || current_text.size() <= previous_text.size()) {
@@ -126,10 +174,12 @@ std::string run_hf_generation(const RunHfOptions& options, const OutputWriter& o
     }
 
     const auto eos_token_id = tokenizer.eos_token_id();
+    std::random_device random_device;
+    std::mt19937 random_engine(random_device());
     auto cache = model.make_cache();
     auto logits = model.forward_cached(token_ids, cache);
     for (std::size_t step = 0; step < options.max_new_tokens; ++step) {
-        const auto next_token_id = select_argmax_token_id(logits);
+        const auto next_token_id = sample_token_id(logits, options.temperature, random_engine);
         if (eos_token_id.has_value() && next_token_id == *eos_token_id) {
             break;
         }
@@ -187,6 +237,10 @@ CliResult run_with_output_writer(std::span<const std::string_view> args, const O
     auto* max_new_tokens_option = run_hf_subcommand->add_option("--max-new-tokens", run_hf_options.max_new_tokens,
                                                                 "Generate up to N new tokens.");
     max_new_tokens_option->check(CLI::PositiveNumber);
+    run_hf_subcommand
+        ->add_option("--temperature", run_hf_options.temperature,
+                     "Sampling temperature. Use 0 for deterministic greedy generation.")
+        ->check(CLI::NonNegativeNumber);
 
     auto owned_args = detail::to_owned_args(args);
     std::vector<char*> argv;
