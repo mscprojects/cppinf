@@ -182,7 +182,9 @@ tensors::Tensor fused_causal_attention(const tensors::TensorView& query, const t
     const auto value_batch = ops::repeat_interleave(value_by_kv_head.view(), 0, queries_per_key_value_head);
     const auto attention_scores =
         ops::matmul(query_batch.view(), key_batch.view(), ops::MatmulOptions{.output_dtype = tensors::DType::F32});
-    const auto probabilities = ops::scaled_causal_softmax_last_dim(attention_scores.view(), score_scale);
+    auto probabilities = ops::scaled_causal_softmax_last_dim(attention_scores.view(), score_scale);
+    probabilities = ops::detail::maybe_cast_result(std::move(probabilities), query.tensor_info().dtype,
+                                                   "qwen_attention_probabilities");
     auto batch_result = ops::matmul(probabilities.view(), value_batch.view());
     batch_result = ops::detail::maybe_cast_result(std::move(batch_result), query.tensor_info().dtype,
                                                   "qwen_attention_attention_output_batch");
