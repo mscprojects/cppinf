@@ -187,6 +187,7 @@ if(BUILD_TESTING)
         tests/models/qwen3/qwen3_real_model_test.cpp
         tests/nn/qwen_decoder_block_test.cpp
         tests/nn/qwen_attention_test.cpp
+        tests/nn/qwen_cache_test.cpp
         tests/nn/qwen_mlp_test.cpp
         tests/nn/rope_test.cpp
         tests/tokenizers/hf/hf_tokenizer_test.cpp

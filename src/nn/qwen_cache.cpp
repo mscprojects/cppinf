@@ -1,5 +1,6 @@
 #include "nn/qwen_cache.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -71,19 +72,56 @@ std::size_t validate_cache_tensor(const tensors::Tensor& cache_tensor, const ten
     return capacity;
 }
 
-void ensure_cache_tensor(std::optional<tensors::Tensor>& cache_tensor, const tensors::TensorView& current,
-                         std::size_t minimum_capacity, std::string_view result_name) {
+tensors::Tensor make_cache_tensor(const tensors::TensorView& current, std::size_t capacity,
+                                  std::string_view result_name) {
+    std::vector<std::int64_t> cache_dims = current.tensor_info().shape.dims();
+    cache_dims[0] = checked_size_to_dim(capacity, fmt::format("{} capacity", result_name));
+    return tensors::Tensor::zeros(tensors::make_result_tensor_info(result_name, current.tensor_info().dtype,
+                                                                   tensors::Shape(std::move(cache_dims))));
+}
+
+std::size_t grow_cache_capacity(std::size_t capacity, std::size_t required_capacity, std::string_view result_name) {
+    if (required_capacity <= capacity) {
+        return capacity;
+    }
+
+    if (capacity > std::numeric_limits<std::size_t>::max() / 2) {
+        return required_capacity;
+    }
+
+    const auto doubled_capacity = capacity * 2;
+    if (doubled_capacity < capacity) {
+        throw std::overflow_error(fmt::format("{} capacity overflowed.", result_name));
+    }
+
+    return std::max(required_capacity, doubled_capacity);
+}
+
+void ensure_cache_tensor_capacity(std::optional<tensors::Tensor>& cache_tensor, const tensors::TensorView& current,
+                                  std::size_t cached_sequence_length, std::size_t required_capacity,
+                                  std::string_view result_name) {
     validate_current_cache_input(current, result_name);
 
-    if (cache_tensor.has_value()) {
+    if (!cache_tensor.has_value()) {
+        // Pure attention calls pass an empty cache, so allocate exactly enough storage for that full-sequence call.
+        cache_tensor = make_cache_tensor(current, required_capacity, result_name);
         return;
     }
 
-    // Pure attention calls pass an empty cache, so allocate exactly enough storage for that one full-sequence call.
-    std::vector<std::int64_t> cache_dims = current.tensor_info().shape.dims();
-    cache_dims[0] = checked_size_to_dim(minimum_capacity, fmt::format("{} capacity", result_name));
-    cache_tensor = tensors::Tensor::zeros(tensors::make_result_tensor_info(result_name, current.tensor_info().dtype,
-                                                                           tensors::Shape(std::move(cache_dims))));
+    const auto capacity = validate_cache_tensor(*cache_tensor, current, cached_sequence_length, result_name);
+    if (required_capacity <= capacity) {
+        return;
+    }
+
+    const auto new_capacity = grow_cache_capacity(capacity, required_capacity, result_name);
+    auto grown_cache_tensor = make_cache_tensor(current, new_capacity, result_name);
+    const auto& current_dims = current.tensor_info().shape.dims();
+    const auto row_byte_size = checked_positive_dim_to_size(current_dims[1], fmt::format("{} heads", result_name)) *
+                               checked_positive_dim_to_size(current_dims[2], fmt::format("{} head dim", result_name)) *
+                               tensors::element_size_bytes(current.tensor_info().dtype);
+    const auto filled_byte_size = cached_sequence_length * row_byte_size;
+    std::memcpy(grown_cache_tensor.mutable_data().data(), cache_tensor->data().data(), filled_byte_size);
+    cache_tensor = std::move(grown_cache_tensor);
 }
 
 void append_sequence_to_cache(std::optional<tensors::Tensor>& cache_tensor, const tensors::TensorView& current,
@@ -96,11 +134,8 @@ void append_sequence_to_cache(std::optional<tensors::Tensor>& cache_tensor, cons
         throw std::overflow_error(fmt::format("{} sequence length overflowed.", result_name));
     }
 
-    ensure_cache_tensor(cache_tensor, current, required_sequence_length, result_name);
-    const auto capacity = validate_cache_tensor(*cache_tensor, current, cached_sequence_length, result_name);
-    if (required_sequence_length > capacity) {
-        throw std::out_of_range(fmt::format("{} cache capacity is exhausted.", result_name));
-    }
+    ensure_cache_tensor_capacity(cache_tensor, current, cached_sequence_length, required_sequence_length, result_name);
+    validate_cache_tensor(*cache_tensor, current, cached_sequence_length, result_name);
 
     // Cache tensors are dense [max_sequence, kv_heads, head_dim], so appending is one contiguous row-block copy.
     const auto destination_offset =
