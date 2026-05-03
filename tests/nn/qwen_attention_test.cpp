@@ -62,7 +62,7 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenAttention_
         .o_proj_weight = o_proj_weight.view(),
     };
 
-    const auto result = qwen_attention(hidden_states.view(), weights, 2, 1, 4, 1e-6f, 1);
+    const auto result = qwen_attention(hidden_states.view(), weights, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
@@ -113,7 +113,7 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleGroupedKvInputs_WhenApplyingQwenAtte
         .o_proj_weight = o_proj_weight.view(),
     };
 
-    const auto result = qwen_attention(hidden_states.view(), weights, 4, 2, 2, 1e-6f, 1);
+    const auto result = qwen_attention(hidden_states.view(), weights, 4, 2, 2, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
@@ -164,14 +164,14 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenAttention
         .o_proj_weight = o_proj_weight.view(),
     };
 
-    const auto result = qwen_attention(hidden_states.view(), weights, 2, 1, 4, 1e-6f, 1);
+    const auto result = qwen_attention(hidden_states.view(), weights, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
     EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
     expect_float_values_near(result.view(),
                              {0.08154296875f, 3.203125f, -1.0234375f, 1.3984375f, -1.6953125f, 0.259765625f,
-                              0.1572265625f, -2.984375f, 0.9765625f, -1.546875f, 2.328125f, 0.6015625f, 1.3203125f,
+                              0.158203125f, -2.96875f, 0.96484375f, -1.546875f, 2.328125f, 0.59765625f, 1.3203125f,
                               -3.109375f, 1.4296875f, -4.1875f, 4.15625f, 0.6171875f},
                              0.02f);
 }

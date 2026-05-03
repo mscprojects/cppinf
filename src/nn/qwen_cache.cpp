@@ -171,18 +171,11 @@ QwenAttentionCache make_qwen_attention_cache(std::string_view key_name, std::str
         .key = tensors::Tensor::zeros(tensors::make_result_tensor_info(key_name, dtype, shape)),
         .value = tensors::Tensor::zeros(tensors::make_result_tensor_info(value_name, dtype, shape)),
         .sequence_length = 0,
-        .sequence_position_offset = 0,
     };
 }
 
 void append_to_qwen_attention_cache(QwenAttentionCache& cache, const tensors::TensorView& key,
-                                    const tensors::TensorView& value, std::size_t sequence_position_offset) {
-    if (cache.sequence_length == 0) {
-        cache.sequence_position_offset = sequence_position_offset;
-    } else if (sequence_position_offset != cache.sequence_position_offset + cache.sequence_length) {
-        throw std::invalid_argument("qwen_attention cache requires contiguous sequence positions.");
-    }
-
+                                    const tensors::TensorView& value) {
     const auto sequence_length =
         checked_positive_dim_to_size(key.tensor_info().shape.dims()[0], "qwen_attention cached append sequence");
     if (checked_positive_dim_to_size(value.tensor_info().shape.dims()[0], "qwen_attention cached value sequence") !=

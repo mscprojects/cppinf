@@ -24,12 +24,11 @@ TEST_F(QwenCacheTest, GivenEmptyCache_WhenAppendingSequence_ThenStorageIsAllocat
     const auto key = make_f32_tensor("key", {2, 1, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
     const auto value = make_f32_tensor("value", {2, 1, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
 
-    append_to_qwen_attention_cache(cache, key.view(), value.view(), 4);
+    append_to_qwen_attention_cache(cache, key.view(), value.view());
 
     ASSERT_TRUE(cache.key.has_value());
     ASSERT_TRUE(cache.value.has_value());
     EXPECT_EQ(std::size_t{2}, cache.sequence_length);
-    EXPECT_EQ(std::size_t{4}, cache.sequence_position_offset);
     EXPECT_EQ(Shape({2, 1, 2}), cache.key->tensor_info().shape);
     EXPECT_EQ(Shape({2, 1, 2}), cache.value->tensor_info().shape);
     expect_float_values_near(qwen_attention_cache_key_view(cache), {1.0f, 2.0f, 3.0f, 4.0f}, 0.0f);
@@ -43,8 +42,8 @@ TEST_F(QwenCacheTest, GivenFullFixedCache_WhenAppendingMoreTokens_ThenStorageGro
     const auto next_key = make_f32_tensor("next_key", {1, 1, 2}, {9.0f, 10.0f});
     const auto next_value = make_f32_tensor("next_value", {1, 1, 2}, {11.0f, 12.0f});
 
-    append_to_qwen_attention_cache(cache, first_key.view(), first_value.view(), 0);
-    append_to_qwen_attention_cache(cache, next_key.view(), next_value.view(), 2);
+    append_to_qwen_attention_cache(cache, first_key.view(), first_value.view());
+    append_to_qwen_attention_cache(cache, next_key.view(), next_value.view());
 
     ASSERT_TRUE(cache.key.has_value());
     ASSERT_TRUE(cache.value.has_value());

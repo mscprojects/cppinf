@@ -1,5 +1,6 @@
 #include "models/qwen3/qwen3_model.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -188,15 +189,26 @@ Qwen3Cache Qwen3Model::make_cache(std::size_t max_sequence_length) const {
 }
 
 tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids, Qwen3Session& session) const {
-    if (token_ids.size() < session.cache_.sequence_length) {
+    if (session.cache_.sequence_length != session.token_ids_.size()) {
+        throw std::invalid_argument("Qwen3Model session token history must match the cache length.");
+    }
+
+    if (token_ids.size() < session.token_ids_.size()) {
         throw std::invalid_argument("Qwen3Model session sequence cannot be shorter than the cached prefix.");
     }
 
-    if (token_ids.size() == session.cache_.sequence_length) {
+    if (!std::equal(session.token_ids_.begin(), session.token_ids_.end(), token_ids.begin())) {
+        throw std::invalid_argument("Qwen3Model session sequence must start with the cached token prefix.");
+    }
+
+    if (token_ids.size() == session.token_ids_.size()) {
         throw std::invalid_argument("Qwen3Model session forward requires at least one uncached token.");
     }
 
-    return forward_cached(token_ids.subspan(session.cache_.sequence_length), session.cache_);
+    const auto new_token_ids = token_ids.subspan(session.token_ids_.size());
+    auto logits = forward_cached(new_token_ids, session.cache_);
+    session.token_ids_.insert(session.token_ids_.end(), new_token_ids.begin(), new_token_ids.end());
+    return logits;
 }
 
 tensors::Tensor Qwen3Model::forward_cached(std::span<const std::int64_t> token_ids, Qwen3Cache& cache) const {
@@ -213,8 +225,7 @@ tensors::Tensor Qwen3Model::forward_cached(std::span<const std::int64_t> token_i
         const auto layer_weights = make_layer_weights(weights_, layer_index);
         hidden_states = nn::qwen_decoder_block_with_cache(
             hidden_states.view(), layer_weights, cache.layers[layer_index], config_.num_attention_heads,
-            config_.num_key_value_heads, config_.head_dim, config_.rms_norm_eps, cache.sequence_length,
-            config_.rope_theta);
+            config_.num_key_value_heads, config_.head_dim, config_.rms_norm_eps, config_.rope_theta);
     }
     cache.sequence_length += token_ids.size();
 
@@ -235,8 +246,12 @@ const loaders::hf::HfConfig& Qwen3Model::config() const {
 
 Qwen3Session::Qwen3Session(Qwen3Cache cache) : cache_(std::move(cache)) {}
 
+std::span<const std::int64_t> Qwen3Session::token_ids() const {
+    return token_ids_;
+}
+
 std::size_t Qwen3Session::sequence_length() const {
-    return cache_.sequence_length;
+    return token_ids_.size();
 }
 
 } // namespace cppinf::models::qwen3

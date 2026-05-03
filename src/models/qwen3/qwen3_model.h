@@ -34,7 +34,7 @@ class Qwen3Model {
     Qwen3Cache make_cache(std::size_t max_sequence_length) const;
 
     // Runs only the uncached suffix of the session's complete growing token sequence.
-    // The sequence must extend the previously forwarded prefix and include at least one new token.
+    // The sequence must start with the session's previous tokens and include at least one new token.
     tensors::Tensor forward(std::span<const std::int64_t> token_ids, Qwen3Session& session) const;
 
     // Runs token ids through the model while appending each layer's K/V tensors to cache.
@@ -54,12 +54,14 @@ class Qwen3Session {
   public:
     explicit Qwen3Session(Qwen3Cache cache);
 
+    std::span<const std::int64_t> token_ids() const;
     std::size_t sequence_length() const;
 
   private:
     friend class Qwen3Model;
 
     Qwen3Cache cache_;
+    std::vector<std::int64_t> token_ids_;
 };
 
 } // namespace cppinf::models::qwen3

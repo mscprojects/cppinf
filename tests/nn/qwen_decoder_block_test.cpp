@@ -100,7 +100,7 @@ TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenDecoder
             },
     };
 
-    const auto result = qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f, 2);
+    const auto result = qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_decoder_block_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
@@ -187,15 +187,15 @@ TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenDecode
             },
     };
 
-    const auto result = qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f, 2);
+    const auto result = qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_decoder_block_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
     EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
     expect_float_values_near(result.view(),
                              {6.4375f, 9.5f, 1.0078125f, -2.046875f, 2.328125f, 4.5f, 4.4375f, 4.78125f, -1.546875f,
-                              1.203125f, 2.8125f, 3.421875f, -2.359375f, 0.0f, 0.0029296875f, -2.109375f, -2.0625f,
-                              -3.5625f},
+                              1.203125f, 2.78125f, 3.40625f, -2.375f, -0.00390625f, -0.0009765625f, -2.09375f, -2.0625f,
+                              -3.578125f},
                              0.05f);
 }
 
