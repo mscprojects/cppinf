@@ -176,7 +176,7 @@ std::string run_hf_generation(const RunHfOptions& options, const OutputWriter& o
     const auto eos_token_id = tokenizer.eos_token_id();
     std::random_device random_device;
     std::mt19937 random_engine(random_device());
-    auto cache = model.make_cache(token_ids.size() + options.max_new_tokens);
+    auto cache = model.make_cache();
 
     // Cached decoding only runs tokens that have not been seen before: first the whole prompt, then one generated token
     // per step. The cache holds the K/V tensors for all earlier tokens.
