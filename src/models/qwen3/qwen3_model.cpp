@@ -157,12 +157,7 @@ tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) con
 }
 
 Qwen3Cache Qwen3Model::make_cache() const {
-    std::vector<nn::QwenDecoderBlockCache> layers;
-    layers.resize(config_.num_hidden_layers);
-    return Qwen3Cache{
-        .layers = std::move(layers),
-        .sequence_length = 0,
-    };
+    return make_cache(1);
 }
 
 Qwen3Cache Qwen3Model::make_cache(std::size_t max_sequence_length) const {

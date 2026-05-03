@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <optional>
 #include <string_view>
 
 #include "tensors/dtype.h"
@@ -11,8 +10,8 @@
 namespace cppinf::nn {
 
 struct QwenAttentionCache {
-    std::optional<tensors::Tensor> key;
-    std::optional<tensors::Tensor> value;
+    tensors::Tensor key;
+    tensors::Tensor value;
     std::size_t sequence_length{};
 };
 

@@ -344,7 +344,8 @@ tensors::Tensor qwen_attention_at_position(const tensors::TensorView& hidden_sta
 tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
                                std::size_t num_attention_heads, std::size_t num_key_value_heads, std::size_t head_dim,
                                float norm_epsilon, float rope_base) {
-    QwenAttentionCache cache;
+    auto cache = make_qwen_attention_cache("qwen_attention_key", "qwen_attention_value",
+                                           hidden_states.tensor_info().dtype, 1, num_key_value_heads, head_dim);
     return qwen_attention_at_position(hidden_states, weights, cache, num_attention_heads, num_key_value_heads, head_dim,
                                       norm_epsilon, 0, rope_base);
 }
