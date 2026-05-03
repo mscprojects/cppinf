@@ -155,16 +155,16 @@ tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids) con
     return forward_cached(token_ids, cache);
 }
 
-Qwen3ModelCache Qwen3Model::make_cache() const {
+Qwen3Cache Qwen3Model::make_cache() const {
     std::vector<nn::QwenDecoderBlockCache> layers;
     layers.resize(config_.num_hidden_layers);
-    return Qwen3ModelCache{
+    return Qwen3Cache{
         .layers = std::move(layers),
         .sequence_length = 0,
     };
 }
 
-Qwen3ModelCache Qwen3Model::make_cache(std::size_t max_sequence_length) const {
+Qwen3Cache Qwen3Model::make_cache(std::size_t max_sequence_length) const {
     if (max_sequence_length == 0) {
         throw std::invalid_argument("Qwen3Model cache requires a non-zero max sequence length.");
     }
@@ -181,13 +181,25 @@ Qwen3ModelCache Qwen3Model::make_cache(std::size_t max_sequence_length) const {
         });
     }
 
-    return Qwen3ModelCache{
+    return Qwen3Cache{
         .layers = std::move(layers),
         .sequence_length = 0,
     };
 }
 
-tensors::Tensor Qwen3Model::forward_cached(std::span<const std::int64_t> token_ids, Qwen3ModelCache& cache) const {
+tensors::Tensor Qwen3Model::forward(std::span<const std::int64_t> token_ids, Qwen3Session& session) const {
+    if (token_ids.size() < session.cache_.sequence_length) {
+        throw std::invalid_argument("Qwen3Model session sequence cannot be shorter than the cached prefix.");
+    }
+
+    if (token_ids.size() == session.cache_.sequence_length) {
+        throw std::invalid_argument("Qwen3Model session forward requires at least one uncached token.");
+    }
+
+    return forward_cached(token_ids.subspan(session.cache_.sequence_length), session.cache_);
+}
+
+tensors::Tensor Qwen3Model::forward_cached(std::span<const std::int64_t> token_ids, Qwen3Cache& cache) const {
     if (cache.layers.size() != config_.num_hidden_layers) {
         throw std::invalid_argument("Qwen3Model cache must have one entry per decoder layer.");
     }
@@ -219,6 +231,12 @@ tensors::Tensor Qwen3Model::forward_cached(std::span<const std::int64_t> token_i
 
 const loaders::hf::HfConfig& Qwen3Model::config() const {
     return config_;
+}
+
+Qwen3Session::Qwen3Session(Qwen3Cache cache) : cache_(std::move(cache)) {}
+
+std::size_t Qwen3Session::sequence_length() const {
+    return cache_.sequence_length;
 }
 
 } // namespace cppinf::models::qwen3
