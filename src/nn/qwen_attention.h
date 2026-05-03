@@ -22,14 +22,13 @@ struct QwenAttentionWeights {
 // into one high-level op while preserving the caller-visible dtype.
 tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
                                std::size_t num_attention_heads, std::size_t num_key_value_heads, std::size_t head_dim,
-                               float norm_epsilon, std::size_t sequence_position_offset = 0,
-                               float rope_base = 1000000.0f);
+                               float norm_epsilon, float rope_base = 1000000.0f);
 
 // Applies Qwen attention while appending this call's rotated keys and values to cache for incremental decoding.
 // Query tokens attend over cached prefix tokens plus the current input, and output shape remains [sequence, hidden].
 tensors::Tensor qwen_attention_with_cache(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
                                           QwenAttentionCache& cache, std::size_t num_attention_heads,
                                           std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
-                                          std::size_t sequence_position_offset = 0, float rope_base = 1000000.0f);
+                                          float rope_base = 1000000.0f);
 
 } // namespace cppinf::nn

@@ -40,8 +40,9 @@ final RMSNorm                       [seq, hidden] -> [seq, hidden]
 tied embedding output projection    [seq, hidden] x [hidden, vocab] -> [seq, vocab]
 ```
 
-`Qwen3Model::forward()` creates a temporary cache and processes the whole sequence. `Qwen3Session` owns a persistent
-cache and lets callers pass the complete growing token sequence while the model forwards only the uncached suffix.
+`Qwen3Model::forward()` creates a temporary cache and processes the whole sequence. `Qwen3Session` owns the processed
+token ids plus a persistent cache, so callers can pass the complete growing token sequence while the model forwards
+only the uncached suffix.
 
 ## Decoder Block
 

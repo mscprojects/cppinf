@@ -171,8 +171,8 @@ tensors::Tensor scaled_position_causal_softmax_last_dim(const tensors::TensorVie
             const auto query_position = query_position_offset + query_index;
             auto max_value = -std::numeric_limits<float>::infinity();
 
-            // The causal mask is expressed in absolute token positions, so a one-token decode at position 4 can see
-            // cached keys 0..4 while still hiding any key whose position is greater than the current query.
+            // Cached model keys normally start at position 0, while direct attention calls can pass a non-zero
+            // sequence offset for oracle parity.
             for (std::size_t key_index = 0; key_index < key_length; ++key_index) {
                 const auto key_position = key_position_offset + key_index;
                 if (key_position <= query_position) {
@@ -287,20 +287,11 @@ tensors::Tensor fused_causal_attention(const tensors::TensorView& query, const t
     return ops::permute(batch_result.view(), output_axes);
 }
 
-} // namespace
-
-tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
-                               std::size_t num_attention_heads, std::size_t num_key_value_heads, std::size_t head_dim,
-                               float norm_epsilon, std::size_t sequence_position_offset, float rope_base) {
-    QwenAttentionCache cache;
-    return qwen_attention_with_cache(hidden_states, weights, cache, num_attention_heads, num_key_value_heads, head_dim,
-                                     norm_epsilon, sequence_position_offset, rope_base);
-}
-
-tensors::Tensor qwen_attention_with_cache(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
-                                          QwenAttentionCache& cache, std::size_t num_attention_heads,
-                                          std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
-                                          std::size_t sequence_position_offset, float rope_base) {
+tensors::Tensor qwen_attention_at_position(const tensors::TensorView& hidden_states,
+                                           const QwenAttentionWeights& weights, QwenAttentionCache& cache,
+                                           std::size_t num_attention_heads, std::size_t num_key_value_heads,
+                                           std::size_t head_dim, float norm_epsilon,
+                                           std::size_t sequence_position_offset, float rope_base) {
     validate_qwen_attention_inputs(hidden_states, weights, num_attention_heads, num_key_value_heads, head_dim,
                                    norm_epsilon, rope_base);
 
@@ -324,17 +315,21 @@ tensors::Tensor qwen_attention_with_cache(const tensors::TensorView& hidden_stat
     const auto normalized_key = ops::rms_norm(key_heads, weights.k_norm_weight, norm_epsilon);
     const auto rotated_query = apply_rope(normalized_query.view(), sequence_position_offset, rope_base, 0);
     const auto rotated_key = apply_rope(normalized_key.view(), sequence_position_offset, rope_base, 0);
+    if (sequence_position_offset < cache.sequence_length) {
+        throw std::invalid_argument("qwen_attention sequence position cannot be shorter than the cached prefix.");
+    }
+    const auto key_position_offset = sequence_position_offset - cache.sequence_length;
 
     // Append only this call's new keys/values. The cache view used below expands to [cached_seq + new_seq, kv_heads,
     // head_dim], while rotated_query remains [new_seq, q_heads, head_dim].
-    append_to_qwen_attention_cache(cache, rotated_key.view(), value_heads, sequence_position_offset);
+    append_to_qwen_attention_cache(cache, rotated_key.view(), value_heads);
 
     // Build token context with causal attention, then flatten [seq, q_heads, head_dim] back to [seq, q_heads *
     // head_dim] for the output projection.
     const auto cached_key = qwen_attention_cache_key_view(cache);
     const auto cached_value = qwen_attention_cache_value_view(cache);
     const auto attention_output = fused_causal_attention(rotated_query.view(), cached_key, cached_value,
-                                                         sequence_position_offset, cache.sequence_position_offset);
+                                                         sequence_position_offset, key_position_offset);
     const auto packed_attention =
         ops::reshape(attention_output.view(), tensors::Shape({query_projection.tensor_info().shape.dims()[0],
                                                               query_projection.tensor_info().shape.dims()[1]}));
@@ -342,6 +337,24 @@ tensors::Tensor qwen_attention_with_cache(const tensors::TensorView& hidden_stat
     // The output projection mixes information across heads and returns to the model hidden size expected by the
     // residual stream.
     return tensors::rename_tensor("qwen_attention_result", linear_project(packed_attention, weights.o_proj_weight));
+}
+
+} // namespace
+
+tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
+                               std::size_t num_attention_heads, std::size_t num_key_value_heads, std::size_t head_dim,
+                               float norm_epsilon, float rope_base) {
+    QwenAttentionCache cache;
+    return qwen_attention_at_position(hidden_states, weights, cache, num_attention_heads, num_key_value_heads, head_dim,
+                                      norm_epsilon, 0, rope_base);
+}
+
+tensors::Tensor qwen_attention_with_cache(const tensors::TensorView& hidden_states, const QwenAttentionWeights& weights,
+                                          QwenAttentionCache& cache, std::size_t num_attention_heads,
+                                          std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
+                                          float rope_base) {
+    return qwen_attention_at_position(hidden_states, weights, cache, num_attention_heads, num_key_value_heads, head_dim,
+                                      norm_epsilon, cache.sequence_length, rope_base);
 }
 
 } // namespace cppinf::nn

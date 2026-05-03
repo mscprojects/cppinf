@@ -105,7 +105,7 @@ def run_case(
 
         batched_hidden_states = hidden_states.to(output_dtype).unsqueeze(0)
         sequence_length = batched_hidden_states.shape[1]
-        position_ids = torch.arange(2, 2 + sequence_length, dtype=torch.long).unsqueeze(0)
+        position_ids = torch.arange(sequence_length, dtype=torch.long).unsqueeze(0)
         position_embeddings = tuple(x.to(output_dtype) for x in rotary_embedding(batched_hidden_states, position_ids))
         attention_mask = make_causal_mask(sequence_length, output_dtype)
 

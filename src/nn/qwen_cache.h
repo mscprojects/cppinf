@@ -14,7 +14,6 @@ struct QwenAttentionCache {
     std::optional<tensors::Tensor> key;
     std::optional<tensors::Tensor> value;
     std::size_t sequence_length{};
-    std::size_t sequence_position_offset{};
 };
 
 struct QwenDecoderBlockCache {
@@ -28,9 +27,9 @@ QwenAttentionCache make_qwen_attention_cache(std::string_view key_name, std::str
                                              std::size_t num_key_value_heads, std::size_t head_dim);
 
 // Appends current rotated keys and values to cache, allocating or growing storage when needed.
-// Current shapes: key/value [new_sequence, kv_heads, head_dim], positions must be contiguous with the cache prefix.
+// Current shapes: key/value [new_sequence, kv_heads, head_dim].
 void append_to_qwen_attention_cache(QwenAttentionCache& cache, const tensors::TensorView& key,
-                                    const tensors::TensorView& value, std::size_t sequence_position_offset);
+                                    const tensors::TensorView& value);
 
 // Returns a view over the filled key prefix, not the unused cache capacity.
 // Shape: [sequence_length, kv_heads, head_dim].
