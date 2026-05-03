@@ -103,7 +103,7 @@ void ensure_cache_tensor_capacity(std::optional<tensors::Tensor>& cache_tensor, 
     validate_current_cache_input(current, result_name);
 
     if (!cache_tensor.has_value()) {
-        // Pure attention calls pass an empty cache, so allocate exactly enough storage for that full-sequence call.
+        // First append establishes the backing shape and allocates exactly the requested sequence capacity.
         cache_tensor = make_cache_tensor(current, required_capacity, result_name);
         return;
     }
@@ -115,6 +115,8 @@ void ensure_cache_tensor_capacity(std::optional<tensors::Tensor>& cache_tensor, 
 
     const auto new_capacity = grow_cache_capacity(capacity, required_capacity, result_name);
     auto grown_cache_tensor = make_cache_tensor(current, new_capacity, result_name);
+
+    // Preserve the filled prefix [cached_sequence, heads, head_dim], unused capacity is intentionally left zeroed.
     const auto& current_dims = current.tensor_info().shape.dims();
     const auto row_byte_size = checked_positive_dim_to_size(current_dims[1], fmt::format("{} heads", result_name)) *
                                checked_positive_dim_to_size(current_dims[2], fmt::format("{} head dim", result_name)) *
@@ -135,7 +137,6 @@ void append_sequence_to_cache(std::optional<tensors::Tensor>& cache_tensor, cons
     }
 
     ensure_cache_tensor_capacity(cache_tensor, current, cached_sequence_length, required_sequence_length, result_name);
-    validate_cache_tensor(*cache_tensor, current, cached_sequence_length, result_name);
 
     // Cache tensors are dense [max_sequence, kv_heads, head_dim], so appending is one contiguous row-block copy.
     const auto destination_offset =

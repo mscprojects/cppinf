@@ -273,6 +273,7 @@ tensors::Tensor permute(const tensors::TensorView& input, std::span<const std::s
     const auto input_data = input.data();
     auto result_data = result.mutable_data();
 
+    // Materialize the permuted tensor by mapping each dense output coordinate back through the requested axis order.
     for (std::size_t output_index = 0; output_index < output_shape.num_elements(); ++output_index) {
         const auto output_coordinates = coordinates_from_flat_index(output_index, output_shape.dims());
         std::vector<std::size_t> input_coordinates(input_dims.size(), 0);
@@ -308,6 +309,7 @@ tensors::Tensor repeat_interleave(const tensors::TensorView& input, std::size_t 
     const auto input_data = input.data();
     auto result_data = result.mutable_data();
 
+    // Repeated output coordinates map back to the same input coordinate along dim, other axes are unchanged.
     for (std::size_t output_index = 0; output_index < output_shape.num_elements(); ++output_index) {
         auto input_coordinates = coordinates_from_flat_index(output_index, output_shape.dims());
         input_coordinates[dim] /= repeats;

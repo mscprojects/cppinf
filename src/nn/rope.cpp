@@ -101,6 +101,8 @@ tensors::Tensor apply_rope(const tensors::TensorView& input, std::size_t sequenc
 
                 const auto dim0 = sequence_dimension == 0 ? sequence_index : outer_index;
                 const auto dim1 = sequence_dimension == 0 ? outer_index : sequence_index;
+
+                // Qwen uses split-half RoPE: channel i is paired with i + head_dim / 2 inside each token/head vector.
                 const auto first_index = flat_index_rank3(dim0, dim1, pair_index, dims);
                 const auto second_index = flat_index_rank3(dim0, dim1, pair_index + half_head_size, dims);
 

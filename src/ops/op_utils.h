@@ -46,6 +46,9 @@ inline float load_float_value(const tensors::TensorView& tensor_view, std::size_
     const auto& dims = tensor_view.tensor_info().shape.dims();
     std::size_t byte_offset = 0;
     std::size_t remaining = index;
+
+    // Convert a logical flat element index into coordinates so strided views, for example narrow/permute inputs, load
+    // the value at the logical position rather than assuming dense contiguous storage.
     for (std::size_t axis = dims.size(); axis-- > 0;) {
         const auto dim = static_cast<std::size_t>(dims[axis]);
         if (dim == 0) {

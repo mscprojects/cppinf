@@ -162,12 +162,17 @@ tensors::Tensor scaled_position_causal_softmax_last_dim(const tensors::TensorVie
     const auto matrix_size = query_length * key_length;
     const auto matrix_count = input.tensor_info().shape.num_elements() / matrix_size;
 
+    // Treat every leading dimension as an independent attention matrix. In Qwen attention the shape is usually
+    // [q_heads, query_seq, key_seq], and cached decoding makes query_seq smaller than key_seq after prefill.
     for (std::size_t matrix_index = 0; matrix_index < matrix_count; ++matrix_index) {
         const auto matrix_offset = matrix_index * matrix_size;
         for (std::size_t query_index = 0; query_index < query_length; ++query_index) {
             const auto row_offset = matrix_offset + query_index * key_length;
             const auto query_position = query_position_offset + query_index;
             auto max_value = -std::numeric_limits<float>::infinity();
+
+            // The causal mask is expressed in absolute token positions, so a one-token decode at position 4 can see
+            // cached keys 0..4 while still hiding any key whose position is greater than the current query.
             for (std::size_t key_index = 0; key_index < key_length; ++key_index) {
                 const auto key_position = key_position_offset + key_index;
                 if (key_position <= query_position) {
@@ -176,6 +181,7 @@ tensors::Tensor scaled_position_causal_softmax_last_dim(const tensors::TensorVie
                 }
             }
 
+            // Store exp(score - max) for visible keys and zero for masked future keys, then normalize this row below.
             auto sum = 0.0f;
             for (std::size_t key_index = 0; key_index < key_length; ++key_index) {
                 const auto flat_index = row_offset + key_index;
@@ -188,6 +194,7 @@ tensors::Tensor scaled_position_causal_softmax_last_dim(const tensors::TensorVie
                 sum += value;
             }
 
+            // Finish softmax by dividing each visible exponential by the row sum, masked positions stay exactly zero.
             for (std::size_t key_index = 0; key_index < key_length; ++key_index) {
                 const auto flat_index = row_offset + key_index;
                 const auto value = ops::detail::load_float_value(tensors::DType::F32, result.data(), flat_index) / sum;
@@ -317,6 +324,9 @@ tensors::Tensor qwen_attention_with_cache(const tensors::TensorView& hidden_stat
     const auto normalized_key = ops::rms_norm(key_heads, weights.k_norm_weight, norm_epsilon);
     const auto rotated_query = apply_rope(normalized_query.view(), sequence_position_offset, rope_base, 0);
     const auto rotated_key = apply_rope(normalized_key.view(), sequence_position_offset, rope_base, 0);
+
+    // Append only this call's new keys/values. The cache view used below expands to [cached_seq + new_seq, kv_heads,
+    // head_dim], while rotated_query remains [new_seq, q_heads, head_dim].
     append_to_qwen_attention_cache(cache, rotated_key.view(), value_heads, sequence_position_offset);
 
     // Build token context with causal attention, then flatten [seq, q_heads, head_dim] back to [seq, q_heads *
