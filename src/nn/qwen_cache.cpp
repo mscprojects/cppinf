@@ -6,7 +6,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 #include <fmt/format.h>
@@ -97,18 +96,12 @@ std::size_t grow_cache_capacity(std::size_t capacity, std::size_t required_capac
     return std::max(required_capacity, doubled_capacity);
 }
 
-void ensure_cache_tensor_capacity(std::optional<tensors::Tensor>& cache_tensor, const tensors::TensorView& current,
+void ensure_cache_tensor_capacity(tensors::Tensor& cache_tensor, const tensors::TensorView& current,
                                   std::size_t cached_sequence_length, std::size_t required_capacity,
                                   std::string_view result_name) {
     validate_current_cache_input(current, result_name);
 
-    if (!cache_tensor.has_value()) {
-        // First append establishes the backing shape and allocates exactly the requested sequence capacity.
-        cache_tensor = make_cache_tensor(current, required_capacity, result_name);
-        return;
-    }
-
-    const auto capacity = validate_cache_tensor(*cache_tensor, current, cached_sequence_length, result_name);
+    const auto capacity = validate_cache_tensor(cache_tensor, current, cached_sequence_length, result_name);
     if (required_capacity <= capacity) {
         return;
     }
@@ -122,11 +115,11 @@ void ensure_cache_tensor_capacity(std::optional<tensors::Tensor>& cache_tensor, 
                                checked_positive_dim_to_size(current_dims[2], fmt::format("{} head dim", result_name)) *
                                tensors::element_size_bytes(current.tensor_info().dtype);
     const auto filled_byte_size = cached_sequence_length * row_byte_size;
-    std::memcpy(grown_cache_tensor.mutable_data().data(), cache_tensor->data().data(), filled_byte_size);
+    std::memcpy(grown_cache_tensor.mutable_data().data(), cache_tensor.data().data(), filled_byte_size);
     cache_tensor = std::move(grown_cache_tensor);
 }
 
-void append_sequence_to_cache(std::optional<tensors::Tensor>& cache_tensor, const tensors::TensorView& current,
+void append_sequence_to_cache(tensors::Tensor& cache_tensor, const tensors::TensorView& current,
                               std::size_t cached_sequence_length, std::string_view result_name) {
     const auto& current_dims = current.tensor_info().shape.dims();
     const auto current_sequence_length =
@@ -143,16 +136,7 @@ void append_sequence_to_cache(std::optional<tensors::Tensor>& cache_tensor, cons
         cached_sequence_length * checked_positive_dim_to_size(current_dims[1], fmt::format("{} heads", result_name)) *
         checked_positive_dim_to_size(current_dims[2], fmt::format("{} head dim", result_name)) *
         tensors::element_size_bytes(current.tensor_info().dtype);
-    std::memcpy(cache_tensor->mutable_data().data() + destination_offset, current.data().data(), current.byte_size());
-}
-
-const tensors::Tensor& require_cache_tensor(const std::optional<tensors::Tensor>& cache_tensor,
-                                            std::string_view result_name) {
-    if (!cache_tensor.has_value()) {
-        throw std::invalid_argument(fmt::format("{} has not been allocated.", result_name));
-    }
-
-    return *cache_tensor;
+    std::memcpy(cache_tensor.mutable_data().data() + destination_offset, current.data().data(), current.byte_size());
 }
 
 } // namespace
@@ -189,13 +173,11 @@ void append_to_qwen_attention_cache(QwenAttentionCache& cache, const tensors::Te
 }
 
 tensors::TensorView qwen_attention_cache_key_view(const QwenAttentionCache& cache) {
-    return ops::narrow(require_cache_tensor(cache.key, "qwen_attention_cached_key").view(), 0, 0,
-                       cache.sequence_length);
+    return ops::narrow(cache.key.view(), 0, 0, cache.sequence_length);
 }
 
 tensors::TensorView qwen_attention_cache_value_view(const QwenAttentionCache& cache) {
-    return ops::narrow(require_cache_tensor(cache.value, "qwen_attention_cached_value").view(), 0, 0,
-                       cache.sequence_length);
+    return ops::narrow(cache.value.view(), 0, 0, cache.sequence_length);
 }
 
 } // namespace cppinf::nn
