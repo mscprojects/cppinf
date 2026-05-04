@@ -135,4 +135,15 @@ if __name__ == "__main__":
         token_ids = torch.tensor([[1, 5, 3, 2]], dtype=torch.int64)
         logits = model(input_ids=token_ids, use_cache=False).logits
 
+        equal_batch_token_ids = torch.tensor([[1, 5, 3, 2], [1, 5, 3, 1]], dtype=torch.int64)
+        equal_batch_logits = model(input_ids=equal_batch_token_ids, use_cache=False).logits
+
+        mixed_batch_token_ids = torch.tensor([[1, 5, 3, 2], [1, 5, 3, 0]], dtype=torch.int64)
+        mixed_batch_attention_mask = torch.tensor([[1, 1, 1, 1], [1, 1, 1, 0]], dtype=torch.int64)
+        mixed_batch_logits = model(
+            input_ids=mixed_batch_token_ids, attention_mask=mixed_batch_attention_mask, use_cache=False
+        ).logits
+
     print(f"bf16_tiny_model={repr(logits[0].float().tolist())}")
+    print(f"bf16_tiny_model_batched_equal={repr(equal_batch_logits.float().tolist())}")
+    print(f"bf16_tiny_model_batched_mixed={repr(mixed_batch_logits.float().tolist())}")

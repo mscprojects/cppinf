@@ -9,12 +9,14 @@
 #include <gtest/gtest.h>
 
 #include "nn/qwen_attention.h"
+#include "ops/tensor_ops.h"
 #include "test_tensor_utils.h"
 
 namespace cppinf::tests {
 
 using nn::qwen_attention;
 using nn::QwenAttentionWeights;
+using ops::squeeze;
 using tensor_test_utils::expect_float_values_near;
 using tensor_test_utils::make_bf16_tensor;
 using tensor_test_utils::make_f32_filled_tensor;
@@ -27,7 +29,7 @@ class QwenAttentionTest : public ::testing::Test {};
 TEST_F(QwenAttentionTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_attention_oracle.py.
     // Case: f32_explicit_head_dim.
-    const auto hidden_states = make_f32_tensor("hidden_states", {3, 6},
+    const auto hidden_states = make_f32_tensor("hidden_states", {1, 3, 6},
                                                {0.29f, 1.20f, 0.75f, -0.67f, 0.26f, 0.29f, 1.30f, 0.24f, -0.61f, -1.14f,
                                                 -1.26f, 0.13f, 0.10f, -1.28f, 0.28f, -0.54f, 0.39f, -0.86f});
     const auto q_proj_weight = make_f32_tensor(
@@ -62,12 +64,13 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenAttention_
         .o_proj_weight = o_proj_weight.view(),
     };
 
-    const auto result = qwen_attention(hidden_states.view(), weights, 2, 1, 4, 1e-6f);
+    const std::array<std::size_t, 1> sequence_lengths = {3};
+    const auto result = qwen_attention(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
-    EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
-    expect_float_values_near(result.view(),
+    EXPECT_EQ(Shape({1, 3, 6}), result.tensor_info().shape);
+    expect_float_values_near(squeeze(result.view(), 0),
                              {0.0933519751f, 3.2009088993f, -1.0087980032f, 1.3863968849f, -1.6964730024f,
                               0.2551130056f, 0.1748879999f, -2.9569544792f, 0.9807962775f, -1.5669782162f,
                               2.3072979450f, 0.5903985500f, 1.3345407248f, -3.1161534786f, 1.4469410181f,
@@ -78,7 +81,7 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenAttention_
 TEST_F(QwenAttentionTest, GivenHfQwen3OracleGroupedKvInputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_attention_oracle.py.
     // Case: f32_grouped_kv_heads.
-    const auto hidden_states = make_f32_tensor("hidden_states", {3, 6},
+    const auto hidden_states = make_f32_tensor("hidden_states", {1, 3, 6},
                                                {-1.18f, -0.01f, 0.34f, -0.22f, -0.84f, -1.32f, 0.24f, 0.55f, -0.91f,
                                                 -0.67f, 0.58f, 0.23f, -1.24f, 0.75f, 1.06f, -0.72f, 0.28f, 0.58f});
     const auto q_proj_weight = make_f32_tensor(
@@ -113,12 +116,13 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleGroupedKvInputs_WhenApplyingQwenAtte
         .o_proj_weight = o_proj_weight.view(),
     };
 
-    const auto result = qwen_attention(hidden_states.view(), weights, 4, 2, 2, 1e-6f);
+    const std::array<std::size_t, 1> sequence_lengths = {3};
+    const auto result = qwen_attention(hidden_states.view(), sequence_lengths, weights, 4, 2, 2, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
-    EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
-    expect_float_values_near(result.view(),
+    EXPECT_EQ(Shape({1, 3, 6}), result.tensor_info().shape);
+    expect_float_values_near(squeeze(result.view(), 0),
                              {-0.6270691156f, -0.0117434002f, 2.9504833221f, -3.2678520679f, -2.6014549732f,
                               3.2746021748f, 0.5774270296f, -0.2272151858f, -1.0994406939f, -0.1693834066f,
                               -3.1025333405f, 3.4062864780f, 2.7876510620f, -0.9044756889f, -2.7945969105f,
@@ -129,7 +133,7 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleGroupedKvInputs_WhenApplyingQwenAtte
 TEST_F(QwenAttentionTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenAttention_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_attention_oracle.py.
     // Case: bf16_explicit_head_dim.
-    const auto hidden_states = make_bf16_tensor("hidden_states", {3, 6},
+    const auto hidden_states = make_bf16_tensor("hidden_states", {1, 3, 6},
                                                 {0.29f, 1.20f, 0.75f, -0.67f, 0.26f, 0.29f, 1.30f, 0.24f, -0.61f,
                                                  -1.14f, -1.26f, 0.13f, 0.10f, -1.28f, 0.28f, -0.54f, 0.39f, -0.86f});
     const auto q_proj_weight = make_bf16_tensor(
@@ -164,12 +168,13 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenAttention
         .o_proj_weight = o_proj_weight.view(),
     };
 
-    const auto result = qwen_attention(hidden_states.view(), weights, 2, 1, 4, 1e-6f);
+    const std::array<std::size_t, 1> sequence_lengths = {3};
+    const auto result = qwen_attention(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
-    EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
-    expect_float_values_near(result.view(),
+    EXPECT_EQ(Shape({1, 3, 6}), result.tensor_info().shape);
+    expect_float_values_near(squeeze(result.view(), 0),
                              {0.08154296875f, 3.203125f, -1.0234375f, 1.3984375f, -1.6953125f, 0.259765625f,
                               0.158203125f, -2.96875f, 0.96484375f, -1.546875f, 2.328125f, 0.59765625f, 1.3203125f,
                               -3.109375f, 1.4296875f, -4.1875f, 4.15625f, 0.6171875f},
@@ -178,7 +183,7 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenAttention
 
 TEST_F(QwenAttentionTest, GivenMismatchedHeadShape_WhenApplyingQwenAttention_ThenItThrows) {
     const auto hidden_states = make_f32_tensor(
-        "hidden_states", {2, 6}, {1.0f, 0.5f, -0.5f, 1.5f, -1.0f, 0.25f, 0.75f, -0.25f, 0.5f, -1.5f, 1.0f, 0.25f});
+        "hidden_states", {1, 2, 6}, {1.0f, 0.5f, -0.5f, 1.5f, -1.0f, 0.25f, 0.75f, -0.25f, 0.5f, -1.5f, 1.0f, 0.25f});
     const auto q_proj_weight = make_f32_filled_tensor("q_proj_weight", {8, 6}, 0.0f);
     const auto q_norm_weight = make_f32_tensor("q_norm_weight", {4}, {1.0f, 1.0f, 1.0f, 1.0f});
     const auto k_proj_weight = make_f32_filled_tensor("k_proj_weight", {4, 6}, 0.0f);
@@ -195,7 +200,9 @@ TEST_F(QwenAttentionTest, GivenMismatchedHeadShape_WhenApplyingQwenAttention_The
         .o_proj_weight = o_proj_weight.view(),
     };
 
-    EXPECT_THROW(qwen_attention(hidden_states.view(), weights, 3, 2, 4, 1e-6f), std::invalid_argument);
+    const std::array<std::size_t, 1> sequence_lengths = {2};
+    EXPECT_THROW(qwen_attention(hidden_states.view(), sequence_lengths, weights, 3, 2, 4, 1e-6f),
+                 std::invalid_argument);
 }
 
 } // namespace cppinf::tests

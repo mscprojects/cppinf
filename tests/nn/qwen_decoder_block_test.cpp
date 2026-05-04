@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "nn/qwen_decoder_block.h"
+#include "ops/tensor_ops.h"
 #include "test_tensor_utils.h"
 
 namespace cppinf::tests {
@@ -17,6 +18,7 @@ using nn::qwen_decoder_block;
 using nn::QwenAttentionWeights;
 using nn::QwenDecoderBlockWeights;
 using nn::QwenMlpWeights;
+using ops::squeeze;
 using tensor_test_utils::expect_float_values_near;
 using tensor_test_utils::make_bf16_tensor;
 using tensor_test_utils::make_f32_filled_tensor;
@@ -29,7 +31,7 @@ class QwenDecoderBlockTest : public ::testing::Test {};
 TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenDecoderBlock_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_decoder_block_oracle.py.
     // Case: f32_basic.
-    const auto hidden_states = make_f32_tensor("hidden_states", {3, 6},
+    const auto hidden_states = make_f32_tensor("hidden_states", {1, 3, 6},
                                                {-0.37f, -1.03f, 1.22f, -0.20f, 1.09f, 0.76f, -0.73f, 0.55f, -0.82f,
                                                 -0.63f, 0.97f, 0.11f, 1.24f, 0.43f, -0.98f, -0.45f, 0.35f, -0.50f});
     const auto input_layernorm_weight =
@@ -100,12 +102,13 @@ TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenDecoder
             },
     };
 
-    const auto result = qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f);
+    const std::array<std::size_t, 1> sequence_lengths = {3};
+    const auto result = qwen_decoder_block(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_decoder_block_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
-    EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
-    expect_float_values_near(result.view(),
+    EXPECT_EQ(Shape({1, 3, 6}), result.tensor_info().shape);
+    expect_float_values_near(squeeze(result.view(), 0),
                              {6.2129516602f, 9.4969549179f, 0.9222573638f, -1.9176485538f, 2.2632308006f, 4.5144519806f,
                               4.3219985962f, 4.7326850891f, -1.5501689911f, 1.2058897018f, 2.7489449978f, 3.3651835918f,
                               -2.3978850842f, -0.0118984580f, 0.0132583976f, -2.1403999329f, -2.0698964596f,
@@ -116,7 +119,7 @@ TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenDecoder
 TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenDecoderBlock_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_decoder_block_oracle.py.
     // Case: bf16_basic.
-    const auto hidden_states = make_bf16_tensor("hidden_states", {3, 6},
+    const auto hidden_states = make_bf16_tensor("hidden_states", {1, 3, 6},
                                                 {-0.37f, -1.03f, 1.22f, -0.20f, 1.09f, 0.76f, -0.73f, 0.55f, -0.82f,
                                                  -0.63f, 0.97f, 0.11f, 1.24f, 0.43f, -0.98f, -0.45f, 0.35f, -0.50f});
     const auto input_layernorm_weight =
@@ -187,12 +190,13 @@ TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenDecode
             },
     };
 
-    const auto result = qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f);
+    const std::array<std::size_t, 1> sequence_lengths = {3};
+    const auto result = qwen_decoder_block(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_decoder_block_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
-    EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
-    expect_float_values_near(result.view(),
+    EXPECT_EQ(Shape({1, 3, 6}), result.tensor_info().shape);
+    expect_float_values_near(squeeze(result.view(), 0),
                              {6.4375f, 9.5f, 1.0078125f, -2.046875f, 2.328125f, 4.5f, 4.4375f, 4.78125f, -1.546875f,
                               1.203125f, 2.78125f, 3.40625f, -2.375f, -0.00390625f, -0.0009765625f, -2.09375f, -2.0625f,
                               -3.578125f},
@@ -201,7 +205,7 @@ TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenDecode
 
 TEST_F(QwenDecoderBlockTest, GivenMismatchedLayerNormWeight_WhenApplyingQwenDecoderBlock_ThenItThrows) {
     const auto hidden_states = make_f32_tensor(
-        "hidden_states", {2, 6}, {1.0f, 0.5f, -0.5f, 1.5f, -1.0f, 0.25f, 0.75f, -0.25f, 0.5f, -1.5f, 1.0f, 0.25f});
+        "hidden_states", {1, 2, 6}, {1.0f, 0.5f, -0.5f, 1.5f, -1.0f, 0.25f, 0.75f, -0.25f, 0.5f, -1.5f, 1.0f, 0.25f});
     const auto bad_norm = make_f32_tensor("bad_norm", {5}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
     const auto q_proj_weight = make_f32_filled_tensor("q_proj_weight", {8, 6}, 0.0f);
     const auto q_norm_weight = make_f32_tensor("q_norm_weight", {4}, {1.0f, 1.0f, 1.0f, 1.0f});
@@ -233,7 +237,9 @@ TEST_F(QwenDecoderBlockTest, GivenMismatchedLayerNormWeight_WhenApplyingQwenDeco
             },
     };
 
-    EXPECT_THROW(qwen_decoder_block(hidden_states.view(), weights, 2, 1, 4, 1e-6f), std::invalid_argument);
+    const std::array<std::size_t, 1> sequence_lengths = {2};
+    EXPECT_THROW(qwen_decoder_block(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f),
+                 std::invalid_argument);
 }
 
 } // namespace cppinf::tests

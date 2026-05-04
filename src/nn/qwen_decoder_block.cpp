@@ -16,7 +16,6 @@
 #include "tensors/shape.h"
 #include "tensors/tensor_info.h"
 #include "tensors/tensor_utils.h"
-
 namespace cppinf::nn {
 namespace {
 
@@ -55,8 +54,8 @@ void validate_qwen_decoder_block_inputs(const tensors::TensorView& hidden_states
         throw std::invalid_argument("qwen_decoder_block requires a positive finite rope base.");
     }
 
-    if (hidden_states.tensor_info().shape.rank() != 2) {
-        throw std::invalid_argument("qwen_decoder_block requires rank-2 hidden states.");
+    if (hidden_states.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("qwen_decoder_block requires rank-3 hidden states.");
     }
 
     const auto dtype = hidden_states.tensor_info().dtype;
@@ -66,63 +65,62 @@ void validate_qwen_decoder_block_inputs(const tensors::TensorView& hidden_states
     }
 
     const auto& hidden_dims = hidden_states.tensor_info().shape.dims();
-    checked_positive_dim_to_size(hidden_dims[0], "qwen_decoder_block sequence length");
-    const auto hidden_size = checked_positive_dim_to_size(hidden_dims[1], "qwen_decoder_block hidden size");
+    for (std::size_t axis = 0; axis + 1 < hidden_dims.size(); ++axis) {
+        checked_positive_dim_to_size(hidden_dims[axis], fmt::format("qwen_decoder_block dim {}", axis));
+    }
+    const auto hidden_size = checked_positive_dim_to_size(hidden_dims.back(), "qwen_decoder_block hidden size");
     validate_norm_weight(weights.input_layernorm_weight, "qwen_decoder_block input_layernorm_weight", hidden_size);
     validate_norm_weight(weights.post_attention_layernorm_weight, "qwen_decoder_block post_attention_layernorm_weight",
                          hidden_size);
 }
 
-} // namespace
-
-tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, const QwenDecoderBlockWeights& weights,
-                                   std::size_t num_attention_heads, std::size_t num_key_value_heads,
-                                   std::size_t head_dim, float norm_epsilon, float rope_base) {
+tensors::Tensor qwen_decoder_block_impl(const tensors::TensorView& hidden_states,
+                                        std::span<const std::size_t> sequence_lengths,
+                                        const QwenDecoderBlockWeights& weights, QwenDecoderBlockCache* cache,
+                                        std::size_t num_attention_heads, std::size_t num_key_value_heads,
+                                        std::size_t head_dim, float norm_epsilon, float rope_base) {
     validate_qwen_decoder_block_inputs(hidden_states, weights, norm_epsilon, rope_base);
 
-    // RMSNorm prepares the residual stream [seq, hidden] for attention without changing its outer shape.
+    // RMSNorm prepares the residual stream [..., hidden] for attention without changing its outer shape.
     const auto attention_input = ops::rms_norm(hidden_states, weights.input_layernorm_weight, norm_epsilon);
 
-    // Self-attention mixes information across the visible prefix and returns another [seq, hidden] tensor, which we
-    // add back to the residual stream.
-    const auto attention_output = qwen_attention(attention_input.view(), weights.attention, num_attention_heads,
-                                                 num_key_value_heads, head_dim, norm_epsilon, rope_base);
+    // Self-attention mixes information across the visible prefix and returns another [..., hidden] tensor, which we add
+    // back to the residual stream.
+    const auto attention_output =
+        cache ? qwen_attention_with_cache(attention_input.view(), sequence_lengths, weights.attention, cache->attention,
+                                          num_attention_heads, num_key_value_heads, head_dim, norm_epsilon, rope_base)
+              : qwen_attention(attention_input.view(), sequence_lengths, weights.attention, num_attention_heads,
+                               num_key_value_heads, head_dim, norm_epsilon, rope_base);
     const auto attention_residual = ops::add(hidden_states, attention_output.view());
 
     // A second RMSNorm prepares the post-attention residual for the feed-forward branch.
     const auto mlp_input =
         ops::rms_norm(attention_residual.view(), weights.post_attention_layernorm_weight, norm_epsilon);
 
-    // The Qwen MLP expands, gates, and projects features back to [seq, hidden], then the second residual edge closes
+    // The Qwen MLP expands, gates, and projects features back to [..., hidden], then the second residual edge closes
     // the block.
     const auto mlp_output = qwen_mlp(mlp_input.view(), weights.mlp);
     return tensors::rename_tensor("qwen_decoder_block_result", ops::add(attention_residual.view(), mlp_output.view()));
 }
 
+} // namespace
+
+tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states,
+                                   std::span<const std::size_t> sequence_lengths,
+                                   const QwenDecoderBlockWeights& weights, std::size_t num_attention_heads,
+                                   std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
+                                   float rope_base) {
+    return qwen_decoder_block_impl(hidden_states, sequence_lengths, weights, nullptr, num_attention_heads,
+                                   num_key_value_heads, head_dim, norm_epsilon, rope_base);
+}
+
 tensors::Tensor qwen_decoder_block_with_cache(const tensors::TensorView& hidden_states,
+                                              std::span<const std::size_t> sequence_lengths,
                                               const QwenDecoderBlockWeights& weights, QwenDecoderBlockCache& cache,
                                               std::size_t num_attention_heads, std::size_t num_key_value_heads,
                                               std::size_t head_dim, float norm_epsilon, float rope_base) {
-    validate_qwen_decoder_block_inputs(hidden_states, weights, norm_epsilon, rope_base);
-
-    // RMSNorm prepares the residual stream [seq, hidden] for attention without changing its outer shape.
-    const auto attention_input = ops::rms_norm(hidden_states, weights.input_layernorm_weight, norm_epsilon);
-
-    // Self-attention mixes information across the visible prefix and returns another [seq, hidden] tensor, which we
-    // add back to the residual stream.
-    const auto attention_output =
-        qwen_attention_with_cache(attention_input.view(), weights.attention, cache.attention, num_attention_heads,
-                                  num_key_value_heads, head_dim, norm_epsilon, rope_base);
-    const auto attention_residual = ops::add(hidden_states, attention_output.view());
-
-    // A second RMSNorm prepares the post-attention residual for the feed-forward branch.
-    const auto mlp_input =
-        ops::rms_norm(attention_residual.view(), weights.post_attention_layernorm_weight, norm_epsilon);
-
-    // The Qwen MLP expands, gates, and projects features back to [seq, hidden], then the second residual edge closes
-    // the block.
-    const auto mlp_output = qwen_mlp(mlp_input.view(), weights.mlp);
-    return tensors::rename_tensor("qwen_decoder_block_result", ops::add(attention_residual.view(), mlp_output.view()));
+    return qwen_decoder_block_impl(hidden_states, sequence_lengths, weights, &cache, num_attention_heads,
+                                   num_key_value_heads, head_dim, norm_epsilon, rope_base);
 }
 
 } // namespace cppinf::nn

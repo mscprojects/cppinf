@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <span>
 
 #include "nn/qwen_attention.h"
 #include "nn/qwen_mlp.h"
@@ -16,15 +17,18 @@ struct QwenDecoderBlockWeights {
     QwenMlpWeights mlp;
 };
 
-// Applies one Qwen decoder block to rank-2 [sequence, hidden] hidden states.
-// Uses pre-norm residual paths, explicit head_dim, a temporary empty cache, and keeps the public tensor dtype.
-tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states, const QwenDecoderBlockWeights& weights,
-                                   std::size_t num_attention_heads, std::size_t num_key_value_heads,
-                                   std::size_t head_dim, float norm_epsilon, float rope_base = 1000000.0f);
+// Applies one Qwen decoder block to rank-3 [batch, sequence, hidden] hidden states.
+// sequence_lengths mark the valid prefix length for each batch row and padded positions remain inert.
+tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states,
+                                   std::span<const std::size_t> sequence_lengths,
+                                   const QwenDecoderBlockWeights& weights, std::size_t num_attention_heads,
+                                   std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
+                                   float rope_base = 1000000.0f);
 
-// Applies one Qwen decoder block while appending this call's K/V tensors to cache for incremental decoding.
-// The input and output are rank-2 [sequence, hidden], and cache stores the attention prefix for this layer.
+// Applies one cached Qwen decoder block to rank-3 [batch, sequence, hidden] hidden states.
+// sequence_lengths describe the valid uncached suffix in this call for each batch row.
 tensors::Tensor qwen_decoder_block_with_cache(const tensors::TensorView& hidden_states,
+                                              std::span<const std::size_t> sequence_lengths,
                                               const QwenDecoderBlockWeights& weights, QwenDecoderBlockCache& cache,
                                               std::size_t num_attention_heads, std::size_t num_key_value_heads,
                                               std::size_t head_dim, float norm_epsilon, float rope_base = 1000000.0f);
