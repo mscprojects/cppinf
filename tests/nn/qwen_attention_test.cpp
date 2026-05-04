@@ -14,7 +14,8 @@
 
 namespace cppinf::tests {
 
-using nn::qwen_attention;
+using nn::make_qwen_attention_cache;
+using nn::qwen_attention_with_cache;
 using nn::QwenAttentionWeights;
 using ops::squeeze;
 using tensor_test_utils::expect_float_values_near;
@@ -65,7 +66,9 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenAttention_
     };
 
     const std::array<std::size_t, 1> sequence_lengths = {3};
-    const auto result = qwen_attention(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f);
+    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 1, 3, 1, 4);
+    const auto result =
+        qwen_attention_with_cache(hidden_states.view(), sequence_lengths, weights, cache, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
@@ -117,7 +120,9 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleGroupedKvInputs_WhenApplyingQwenAtte
     };
 
     const std::array<std::size_t, 1> sequence_lengths = {3};
-    const auto result = qwen_attention(hidden_states.view(), sequence_lengths, weights, 4, 2, 2, 1e-6f);
+    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 1, 3, 2, 2);
+    const auto result =
+        qwen_attention_with_cache(hidden_states.view(), sequence_lengths, weights, cache, 4, 2, 2, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
@@ -169,7 +174,9 @@ TEST_F(QwenAttentionTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenAttention
     };
 
     const std::array<std::size_t, 1> sequence_lengths = {3};
-    const auto result = qwen_attention(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f);
+    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::BF16, 1, 3, 1, 4);
+    const auto result =
+        qwen_attention_with_cache(hidden_states.view(), sequence_lengths, weights, cache, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_attention_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
@@ -201,7 +208,8 @@ TEST_F(QwenAttentionTest, GivenMismatchedHeadShape_WhenApplyingQwenAttention_The
     };
 
     const std::array<std::size_t, 1> sequence_lengths = {2};
-    EXPECT_THROW(qwen_attention(hidden_states.view(), sequence_lengths, weights, 3, 2, 4, 1e-6f),
+    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 1, 2, 2, 4);
+    EXPECT_THROW(qwen_attention_with_cache(hidden_states.view(), sequence_lengths, weights, cache, 3, 2, 4, 1e-6f),
                  std::invalid_argument);
 }
 

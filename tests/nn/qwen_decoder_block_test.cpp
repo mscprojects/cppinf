@@ -14,8 +14,10 @@
 
 namespace cppinf::tests {
 
-using nn::qwen_decoder_block;
+using nn::make_qwen_attention_cache;
+using nn::qwen_decoder_block_with_cache;
 using nn::QwenAttentionWeights;
+using nn::QwenDecoderBlockCache;
 using nn::QwenDecoderBlockWeights;
 using nn::QwenMlpWeights;
 using ops::squeeze;
@@ -103,7 +105,11 @@ TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleF32Inputs_WhenApplyingQwenDecoder
     };
 
     const std::array<std::size_t, 1> sequence_lengths = {3};
-    const auto result = qwen_decoder_block(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f);
+    auto cache = QwenDecoderBlockCache{
+        .attention = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 1, 3, 1, 4),
+    };
+    const auto result =
+        qwen_decoder_block_with_cache(hidden_states.view(), sequence_lengths, weights, cache, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_decoder_block_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
@@ -191,7 +197,11 @@ TEST_F(QwenDecoderBlockTest, GivenHfQwen3OracleBf16Inputs_WhenApplyingQwenDecode
     };
 
     const std::array<std::size_t, 1> sequence_lengths = {3};
-    const auto result = qwen_decoder_block(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f);
+    auto cache = QwenDecoderBlockCache{
+        .attention = make_qwen_attention_cache("key_cache", "value_cache", DType::BF16, 1, 3, 1, 4),
+    };
+    const auto result =
+        qwen_decoder_block_with_cache(hidden_states.view(), sequence_lengths, weights, cache, 2, 1, 4, 1e-6f);
 
     EXPECT_EQ(std::string("qwen_decoder_block_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
@@ -238,7 +248,10 @@ TEST_F(QwenDecoderBlockTest, GivenMismatchedLayerNormWeight_WhenApplyingQwenDeco
     };
 
     const std::array<std::size_t, 1> sequence_lengths = {2};
-    EXPECT_THROW(qwen_decoder_block(hidden_states.view(), sequence_lengths, weights, 2, 1, 4, 1e-6f),
+    auto cache = QwenDecoderBlockCache{
+        .attention = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 1, 2, 1, 4),
+    };
+    EXPECT_THROW(qwen_decoder_block_with_cache(hidden_states.view(), sequence_lengths, weights, cache, 2, 1, 4, 1e-6f),
                  std::invalid_argument);
 }
 

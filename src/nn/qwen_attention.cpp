@@ -347,18 +347,17 @@ tensors::Tensor fused_causal_attention(const tensors::TensorView& query, const t
 
 tensors::Tensor qwen_attention_impl(const tensors::TensorView& hidden_states,
                                     std::span<const std::size_t> sequence_lengths, const QwenAttentionWeights& weights,
-                                    QwenAttentionCache* cache, std::size_t num_attention_heads,
+                                    QwenAttentionCache& cache, std::size_t num_attention_heads,
                                     std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
                                     float rope_base) {
     validate_qwen_attention_inputs(hidden_states, sequence_lengths, weights, num_attention_heads, num_key_value_heads,
-                                   head_dim, norm_epsilon, rope_base,
-                                   cache ? "qwen_attention_with_cache" : "qwen_attention");
+                                   head_dim, norm_epsilon, rope_base, "qwen_attention");
 
     const auto batch_size =
         checked_positive_dim_to_size(hidden_states.tensor_info().shape.dims()[0], "qwen_attention batch size");
     const auto sequence_capacity =
         checked_positive_dim_to_size(hidden_states.tensor_info().shape.dims()[1], "qwen_attention sequence length");
-    if (cache != nullptr && cache->sequence_lengths.size() != batch_size) {
+    if (cache.sequence_lengths.size() != batch_size) {
         throw std::invalid_argument("qwen_attention cache batch size must match the hidden state batch size.");
     }
 
@@ -384,24 +383,16 @@ tensors::Tensor qwen_attention_impl(const tensors::TensorView& hidden_states,
     const auto normalized_query = ops::rms_norm(query_heads, weights.q_norm_weight, norm_epsilon);
     const auto normalized_key = ops::rms_norm(key_heads, weights.k_norm_weight, norm_epsilon);
 
-    std::vector<std::size_t> query_position_offsets(batch_size, 0);
-    if (cache != nullptr) {
-        query_position_offsets = cache->sequence_lengths;
-    }
+    const auto query_position_offsets = cache.sequence_lengths;
     const auto rotated_query =
         apply_rope_batched(normalized_query.view(), query_position_offsets, rope_base, "qwen_attention_query_rope");
     const auto rotated_key =
         apply_rope_batched(normalized_key.view(), query_position_offsets, rope_base, "qwen_attention_key_rope");
 
-    std::vector<std::size_t> key_lengths(sequence_lengths.begin(), sequence_lengths.end());
-    tensors::TensorView cached_key = rotated_key.view();
-    tensors::TensorView cached_value = value_heads;
-    if (cache != nullptr) {
-        append_to_qwen_attention_cache(*cache, rotated_key.view(), value_heads, sequence_lengths);
-        key_lengths = cache->sequence_lengths;
-        cached_key = cache->key.view();
-        cached_value = cache->value.view();
-    }
+    append_to_qwen_attention_cache(cache, rotated_key.view(), value_heads, sequence_lengths);
+    const auto key_lengths = cache.sequence_lengths;
+    const auto cached_key = cache.key.view();
+    const auto cached_value = cache.value.view();
 
     // Build token context with causal attention, then flatten [batch, seq, q_heads, head_dim] back to
     // [batch, seq, q_heads * head_dim] for the output projection.
@@ -420,25 +411,12 @@ tensors::Tensor qwen_attention_impl(const tensors::TensorView& hidden_states,
 
 } // namespace
 
-tensors::Tensor qwen_attention(const tensors::TensorView& hidden_states, std::span<const std::size_t> sequence_lengths,
-                               const QwenAttentionWeights& weights, std::size_t num_attention_heads,
-                               std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
-                               float rope_base) {
-    const auto sequence_capacity =
-        checked_positive_dim_to_size(hidden_states.tensor_info().shape.dims()[1], "qwen_attention sequence length");
-    auto cache =
-        make_qwen_attention_cache("qwen_attention_key", "qwen_attention_value", hidden_states.tensor_info().dtype,
-                                  sequence_lengths.size(), sequence_capacity, num_key_value_heads, head_dim);
-    return qwen_attention_impl(hidden_states, sequence_lengths, weights, &cache, num_attention_heads,
-                               num_key_value_heads, head_dim, norm_epsilon, rope_base);
-}
-
 tensors::Tensor qwen_attention_with_cache(const tensors::TensorView& hidden_states,
                                           std::span<const std::size_t> sequence_lengths,
                                           const QwenAttentionWeights& weights, QwenAttentionCache& cache,
                                           std::size_t num_attention_heads, std::size_t num_key_value_heads,
                                           std::size_t head_dim, float norm_epsilon, float rope_base) {
-    return qwen_attention_impl(hidden_states, sequence_lengths, weights, &cache, num_attention_heads,
+    return qwen_attention_impl(hidden_states, sequence_lengths, weights, cache, num_attention_heads,
                                num_key_value_heads, head_dim, norm_epsilon, rope_base);
 }
 
