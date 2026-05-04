@@ -30,8 +30,8 @@ void validate_qwen_mlp_inputs(const tensors::TensorView& hidden_states, const Qw
         dtype != weights.down_proj_weight.tensor_info().dtype) {
         throw std::invalid_argument("qwen_mlp requires matching tensor dtypes.");
     }
-    if (hidden_states.tensor_info().shape.rank() != 2 && hidden_states.tensor_info().shape.rank() != 3) {
-        throw std::invalid_argument("qwen_mlp requires rank-2 or rank-3 hidden states.");
+    if (hidden_states.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("qwen_mlp requires rank-3 hidden states.");
     }
 
     const auto& hidden_dims = hidden_states.tensor_info().shape.dims();

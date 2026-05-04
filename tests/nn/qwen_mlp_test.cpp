@@ -9,12 +9,14 @@
 #include <gtest/gtest.h>
 
 #include "nn/qwen_mlp.h"
+#include "ops/tensor_ops.h"
 #include "test_tensor_utils.h"
 
 namespace cppinf::tests {
 
 using nn::qwen_mlp;
 using nn::QwenMlpWeights;
+using ops::squeeze;
 using tensor_test_utils::expect_float_values_near;
 using tensor_test_utils::make_bf16_tensor;
 using tensor_test_utils::make_f32_tensor;
@@ -26,7 +28,7 @@ class QwenMlpTest : public ::testing::Test {};
 TEST_F(QwenMlpTest, GivenTorchOracleF32Inputs_WhenApplyingQwenMlp_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_mlp_oracle.py.
     // Case: f32_basic.
-    const auto hidden_states = make_f32_tensor("hidden_states", {3, 6},
+    const auto hidden_states = make_f32_tensor("hidden_states", {1, 3, 6},
                                                {-1.00f, 0.71f, -0.91f, -1.26f, 1.27f, -1.03f, 1.06f, -0.99f, 1.05f,
                                                 0.56f, 0.79f, 0.46f, -0.22f, 0.83f, -1.14f, -0.28f, 1.28f, 1.29f});
     const auto gate_proj_weight = make_f32_tensor(
@@ -61,8 +63,8 @@ TEST_F(QwenMlpTest, GivenTorchOracleF32Inputs_WhenApplyingQwenMlp_ThenExpectedVa
 
     EXPECT_EQ(std::string("qwen_mlp_result"), result.tensor_info().name);
     EXPECT_EQ(DType::F32, result.tensor_info().dtype);
-    EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
-    expect_float_values_near(result.view(),
+    EXPECT_EQ(Shape({1, 3, 6}), result.tensor_info().shape);
+    expect_float_values_near(squeeze(result.view(), 0),
                              {-0.2274054438f, -0.9172383547f, 0.5187256336f, 1.0370498896f, 0.1260067672f,
                               -0.7102236152f, 2.5894837379f, -2.0916500092f, 0.5674530864f, 2.2954623699f,
                               -2.7154958248f, -2.8996183872f, 4.0634026527f, 0.0039536608f, -4.7101669312f,
@@ -73,7 +75,7 @@ TEST_F(QwenMlpTest, GivenTorchOracleF32Inputs_WhenApplyingQwenMlp_ThenExpectedVa
 TEST_F(QwenMlpTest, GivenTorchOracleBf16Inputs_WhenApplyingQwenMlp_ThenExpectedValuesAreReturned) {
     // Golden values generated with tests/nn/qwen_mlp_oracle.py.
     // Case: bf16_basic.
-    const auto hidden_states = make_bf16_tensor("hidden_states", {3, 6},
+    const auto hidden_states = make_bf16_tensor("hidden_states", {1, 3, 6},
                                                 {-1.00f, 0.71f, -0.91f, -1.26f, 1.27f, -1.03f, 1.06f, -0.99f, 1.05f,
                                                  0.56f, 0.79f, 0.46f, -0.22f, 0.83f, -1.14f, -0.28f, 1.28f, 1.29f});
     const auto gate_proj_weight = make_bf16_tensor(
@@ -108,8 +110,8 @@ TEST_F(QwenMlpTest, GivenTorchOracleBf16Inputs_WhenApplyingQwenMlp_ThenExpectedV
 
     EXPECT_EQ(std::string("qwen_mlp_result"), result.tensor_info().name);
     EXPECT_EQ(DType::BF16, result.tensor_info().dtype);
-    EXPECT_EQ(Shape({3, 6}), result.tensor_info().shape);
-    expect_float_values_near(result.view(),
+    EXPECT_EQ(Shape({1, 3, 6}), result.tensor_info().shape);
+    expect_float_values_near(squeeze(result.view(), 0),
                              {-0.22265625f, -0.91015625f, 0.515625f, 1.03125f, 0.11767578125f, -0.7109375f, 2.609375f,
                               -2.109375f, 0.5390625f, 2.296875f, -2.734375f, -2.921875f, 4.03125f, -0.003997802734375f,
                               -4.65625f, -2.265625f, -8.3125f, -3.234375f},
@@ -118,7 +120,7 @@ TEST_F(QwenMlpTest, GivenTorchOracleBf16Inputs_WhenApplyingQwenMlp_ThenExpectedV
 
 TEST_F(QwenMlpTest, GivenMismatchedDownProjection_WhenApplyingQwenMlp_ThenItThrows) {
     const auto hidden_states = make_f32_tensor(
-        "hidden_states", {2, 6}, {1.0f, 0.5f, -0.5f, 1.5f, -1.0f, 0.25f, 0.75f, -0.25f, 0.5f, -1.5f, 1.0f, 0.25f});
+        "hidden_states", {1, 2, 6}, {1.0f, 0.5f, -0.5f, 1.5f, -1.0f, 0.25f, 0.75f, -0.25f, 0.5f, -1.5f, 1.0f, 0.25f});
     const auto gate_proj_weight = make_f32_tensor(
         "gate_proj_weight", {4, 6}, {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                      0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f});

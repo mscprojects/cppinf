@@ -54,8 +54,8 @@ void validate_sequence_lengths(std::span<const std::size_t> sequence_lengths, st
 
 tensors::TensorView reshape_heads(const tensors::TensorView& input, std::size_t head_count, std::size_t head_dim,
                                   std::string_view result_name) {
-    if (input.tensor_info().shape.rank() != 2 && input.tensor_info().shape.rank() != 3) {
-        throw std::invalid_argument("reshape_heads requires a rank-2 or rank-3 tensor.");
+    if (input.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument("reshape_heads requires a rank-3 tensor.");
     }
 
     const auto& dims = input.tensor_info().shape.dims();
@@ -64,11 +64,6 @@ tensors::TensorView reshape_heads(const tensors::TensorView& input, std::size_t 
     if (merged_head_size != head_count * head_dim) {
         throw std::invalid_argument(
             fmt::format("{} requires merged head size to equal head_count * head_dim.", result_name));
-    }
-
-    if (input.tensor_info().shape.rank() == 2) {
-        return ops::reshape(input, tensors::Shape({dims[0], static_cast<std::int64_t>(head_count),
-                                                   static_cast<std::int64_t>(head_dim)}));
     }
 
     return ops::reshape(input, tensors::Shape({dims[0], dims[1], static_cast<std::int64_t>(head_count),
