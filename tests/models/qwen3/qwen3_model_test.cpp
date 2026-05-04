@@ -10,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include "models/qwen3/qwen3_model.h"
+#include "ops/tensor_ops.h"
 #include "tensors/tensor.h"
 #include "test_file_utils.h"
 #include "test_safetensors_utils.h"
@@ -20,6 +21,9 @@ namespace cppinf::tests {
 
 using models::qwen3::Qwen3Model;
 using models::qwen3::Qwen3Session;
+using models::qwen3::TokenIdBatch;
+using ops::narrow;
+using ops::squeeze;
 using safetensors_test_utils::append_bf16_matrix;
 using safetensors_test_utils::append_bf16_vector;
 using tensor_test_utils::expect_float_values_near;
@@ -38,6 +42,15 @@ class Qwen3ModelTest : public ::testing::Test {
 
     const std::filesystem::path& model_dir() const {
         return temp_dir_.path();
+    }
+
+    tensors::TensorView logits_batch_row(const Tensor& logits, std::size_t batch_index) const {
+        return squeeze(narrow(logits.view(), 0, batch_index, 1), 0);
+    }
+
+    tensors::TensorView logits_batch_row_prefix(const Tensor& logits, std::size_t batch_index,
+                                                std::size_t sequence_length) const {
+        return narrow(logits_batch_row(logits, batch_index), 0, 0, sequence_length);
     }
 
   private:
@@ -321,10 +334,10 @@ TEST_F(Qwen3ModelTest, GivenTinyBf16Checkpoint_WhenRunningCachedForward_ThenLast
     EXPECT_EQ(Shape({3, 13}), prompt_logits.tensor_info().shape);
     EXPECT_EQ(DType::BF16, next_logits.tensor_info().dtype);
     EXPECT_EQ(Shape({1, 13}), next_logits.tensor_info().shape);
-    EXPECT_EQ(std::size_t{4}, cache.sequence_length);
+    EXPECT_EQ(std::vector<std::size_t>({4}), cache.sequence_lengths);
     ASSERT_EQ(std::size_t{2}, cache.layers.size());
-    EXPECT_EQ(std::size_t{4}, cache.layers[0].attention.sequence_length);
-    EXPECT_EQ(std::size_t{4}, cache.layers[1].attention.sequence_length);
+    EXPECT_EQ(std::vector<std::size_t>({4}), cache.layers[0].attention.sequence_lengths);
+    EXPECT_EQ(std::vector<std::size_t>({4}), cache.layers[1].attention.sequence_lengths);
     expect_float_values_near(next_logits.view(),
                              {-1.640625f, -1.046875f, 0.66015625f, -2.0625f, 0.65234375f, -1.328125f, 0.73046875f,
                               0.60546875f, -0.32421875f, 2.296875f, -1.75f, -0.29296875f, 0.53515625f},
@@ -371,6 +384,103 @@ TEST_F(Qwen3ModelTest, GivenUntiedEmbeddings_WhenLoadingModel_ThenItThrows) {
     write_tiny_model_dir(false);
 
     EXPECT_THROW(Qwen3Model::from_dir(model_dir()), std::invalid_argument);
+}
+
+TEST_F(Qwen3ModelTest, GivenTinyBf16Checkpoint_WhenRunningEqualLengthBatchedForward_ThenExpectedLogitsAreReturned) {
+    // Golden values generated with tests/models/qwen3/qwen3_model_oracle.py.
+    // Case: bf16_tiny_model_batched_equal.
+    write_tiny_model_dir();
+
+    const auto model = Qwen3Model::from_dir(model_dir());
+    const TokenIdBatch token_ids{{1, 5, 3, 2}, {1, 5, 3, 1}};
+
+    const auto logits = model.forward(token_ids);
+
+    EXPECT_EQ(DType::BF16, logits.tensor_info().dtype);
+    EXPECT_EQ(Shape({2, 4, 13}), logits.tensor_info().shape);
+    expect_float_values_near(
+        logits_batch_row(logits, 0),
+        {0.306640625f,   0.1044921875f, 0.28515625f,     1.484375f,    4.28125f,    -0.033935546875f, -1.625f,
+         -1.4296875f,    0.94921875f,   1.21875f,        -2.515625f,   0.859375f,   -2.8125f,         1.46875f,
+         -0.1826171875f, -0.58984375f,  1.2421875f,      4.71875f,     0.84765625f, -2.8125f,         -1.671875f,
+         0.71875f,       1.484375f,     -2.453125f,      0.275390625f, -2.796875f,  1.65625f,         1.5703125f,
+         -0.8125f,       3.125f,        4.59375f,        2.34375f,     -2.34375f,   -1.9453125f,      1.765625f,
+         1.109375f,      -2.21875f,     -0.08740234375f, -3.671875f,   -1.640625f,  -1.046875f,       0.66015625f,
+         -2.0625f,       0.65234375f,   -1.328125f,      0.73046875f,  0.60546875f, -0.32421875f,     2.296875f,
+         -1.75f,         -0.29296875f,  0.53515625f},
+        0.05f);
+    expect_float_values_near(
+        logits_batch_row(logits, 1),
+        {0.306640625f,   0.1044921875f, 0.28515625f,     1.484375f,    4.28125f,    -0.033935546875f, -1.625f,
+         -1.4296875f,    0.94921875f,   1.21875f,        -2.515625f,   0.859375f,   -2.8125f,         1.46875f,
+         -0.1826171875f, -0.58984375f,  1.2421875f,      4.71875f,     0.84765625f, -2.8125f,         -1.671875f,
+         0.71875f,       1.484375f,     -2.453125f,      0.275390625f, -2.796875f,  1.65625f,         1.5703125f,
+         -0.8125f,       3.125f,        4.59375f,        2.34375f,     -2.34375f,   -1.9453125f,      1.765625f,
+         1.109375f,      -2.21875f,     -0.08740234375f, -3.671875f,   0.68359375f, 0.984375f,        0.031005859375f,
+         2.25f,          4.5625f,       0.73828125f,     -1.5703125f,  -1.4921875f, 1.609375f,        0.51953125f,
+         -2.5625f,       0.46875f,      -3.453125f},
+        0.1f);
+}
+
+TEST_F(Qwen3ModelTest, GivenTinyBf16Checkpoint_WhenRunningMixedLengthBatchedForward_ThenValidLogitsAreReturned) {
+    // Golden values generated with tests/models/qwen3/qwen3_model_oracle.py.
+    // Case: bf16_tiny_model_batched_mixed.
+    write_tiny_model_dir();
+
+    const auto model = Qwen3Model::from_dir(model_dir());
+    const TokenIdBatch token_ids{{1, 5, 3, 2}, {1, 5, 3}};
+
+    const auto logits = model.forward(token_ids);
+
+    EXPECT_EQ(DType::BF16, logits.tensor_info().dtype);
+    EXPECT_EQ(Shape({2, 4, 13}), logits.tensor_info().shape);
+    expect_float_values_near(
+        logits_batch_row(logits, 0),
+        {0.306640625f,   0.1044921875f, 0.28515625f,     1.484375f,    4.28125f,    -0.033935546875f, -1.625f,
+         -1.4296875f,    0.94921875f,   1.21875f,        -2.515625f,   0.859375f,   -2.8125f,         1.46875f,
+         -0.1826171875f, -0.58984375f,  1.2421875f,      4.71875f,     0.84765625f, -2.8125f,         -1.671875f,
+         0.71875f,       1.484375f,     -2.453125f,      0.275390625f, -2.796875f,  1.65625f,         1.5703125f,
+         -0.8125f,       3.125f,        4.59375f,        2.34375f,     -2.34375f,   -1.9453125f,      1.765625f,
+         1.109375f,      -2.21875f,     -0.08740234375f, -3.671875f,   -1.640625f,  -1.046875f,       0.66015625f,
+         -2.0625f,       0.65234375f,   -1.328125f,      0.73046875f,  0.60546875f, -0.32421875f,     2.296875f,
+         -1.75f,         -0.29296875f,  0.53515625f},
+        0.05f);
+    expect_float_values_near(logits_batch_row_prefix(logits, 1, 3),
+                             {0.306640625f, 0.1044921875f,   0.28515625f,    1.484375f,    4.28125f,   -0.033935546875f,
+                              -1.625f,      -1.4296875f,     0.94921875f,    1.21875f,     -2.515625f, 0.859375f,
+                              -2.8125f,     1.46875f,        -0.1826171875f, -0.58984375f, 1.2421875f, 4.71875f,
+                              0.84765625f,  -2.8125f,        -1.671875f,     0.71875f,     1.484375f,  -2.453125f,
+                              0.275390625f, -2.796875f,      1.65625f,       1.5703125f,   -0.8125f,   3.125f,
+                              4.59375f,     2.34375f,        -2.34375f,      -1.9453125f,  1.765625f,  1.109375f,
+                              -2.21875f,    -0.08740234375f, -3.671875f},
+                             0.05f);
+}
+
+TEST_F(Qwen3ModelTest, GivenMixedLengthBatch_WhenRunningCachedForward_ThenEachRowMatchesStandaloneForward) {
+    write_tiny_model_dir();
+
+    const auto model = Qwen3Model::from_dir(model_dir());
+    auto cache = model.make_cache(2, 4);
+    const TokenIdBatch prompt_token_ids{{1, 5, 3}, {1, 5}};
+    const TokenIdBatch next_token_ids{{2}, {3}};
+
+    const auto prompt_logits = model.forward_cached(prompt_token_ids, cache);
+    const auto next_logits = model.forward_cached(next_token_ids, cache);
+    const auto first_expected = model.forward(std::vector<std::int64_t>{1, 5, 3, 2});
+    const auto second_expected = model.forward(std::vector<std::int64_t>{1, 5, 3});
+
+    EXPECT_EQ(DType::BF16, prompt_logits.tensor_info().dtype);
+    EXPECT_EQ(Shape({2, 3, 13}), prompt_logits.tensor_info().shape);
+    EXPECT_EQ(DType::BF16, next_logits.tensor_info().dtype);
+    EXPECT_EQ(Shape({2, 1, 13}), next_logits.tensor_info().shape);
+    EXPECT_EQ(std::vector<std::size_t>({4, 3}), cache.sequence_lengths);
+    ASSERT_EQ(std::size_t{2}, cache.layers.size());
+    EXPECT_EQ(std::vector<std::size_t>({4, 3}), cache.layers[0].attention.sequence_lengths);
+    EXPECT_EQ(std::vector<std::size_t>({4, 3}), cache.layers[1].attention.sequence_lengths);
+    EXPECT_EQ(tensor_test_utils::read_float_values(logits_batch_row(next_logits, 0)),
+              tensor_test_utils::read_float_values(narrow(first_expected.view(), 0, 3, 1)));
+    EXPECT_EQ(tensor_test_utils::read_float_values(logits_batch_row(next_logits, 1)),
+              tensor_test_utils::read_float_values(narrow(second_expected.view(), 0, 2, 1)));
 }
 
 } // namespace cppinf::tests

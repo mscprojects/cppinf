@@ -11,7 +11,7 @@ struct QwenMlpWeights {
     tensors::TensorView down_proj_weight;
 };
 
-// Applies the bias-free Qwen MLP to rank-2 [sequence, hidden] hidden states.
+// Applies the bias-free Qwen MLP to rank-2 [sequence, hidden] or rank-3 [batch, sequence, hidden] hidden states.
 // Gate and up project to the intermediate width, down projects back to hidden, and the result keeps the input dtype.
 tensors::Tensor qwen_mlp(const tensors::TensorView& hidden_states, const QwenMlpWeights& weights);
 

@@ -79,4 +79,15 @@ inline Tensor rename_tensor(std::string_view name, const Tensor& tensor) {
                   std::vector<std::byte>(tensor.bytes().begin(), tensor.bytes().end()));
 }
 
+// Returns an owned tensor copy of a contiguous view, optionally renaming the tensor.
+inline Tensor materialize_tensor(std::string_view name, const TensorView& tensor_view) {
+    if (!tensor_view.is_contiguous()) {
+        throw std::invalid_argument("materialize_tensor requires a contiguous tensor view.");
+    }
+
+    const auto bytes = tensor_view.data().first(tensor_view.byte_size());
+    return Tensor(make_result_tensor_info(name, tensor_view.tensor_info().dtype, tensor_view.tensor_info().shape),
+                  std::vector<std::byte>(bytes.begin(), bytes.end()));
+}
+
 } // namespace cppinf::tensors

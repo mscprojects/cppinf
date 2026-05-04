@@ -19,34 +19,48 @@ using tensors::Shape;
 class QwenCacheTest : public ::testing::Test {};
 
 TEST_F(QwenCacheTest, GivenMinimumCache_WhenAppendingSequence_ThenStorageGrowsOnDemand) {
-    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 1, 1, 2);
-    const auto key = make_f32_tensor("key", {2, 1, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    const auto value = make_f32_tensor("value", {2, 1, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 1, 1, 1, 2);
+    const auto key = make_f32_tensor("key", {1, 2, 1, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto value = make_f32_tensor("value", {1, 2, 1, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
 
-    append_to_qwen_attention_cache(cache, key.view(), value.view());
+    append_to_qwen_attention_cache(cache, key.view(), value.view(), std::vector<std::size_t>({2}));
 
-    EXPECT_EQ(std::size_t{2}, cache.sequence_length);
-    EXPECT_EQ(Shape({2, 1, 2}), cache.key.tensor_info().shape);
-    EXPECT_EQ(Shape({2, 1, 2}), cache.value.tensor_info().shape);
-    expect_float_values_near(qwen_attention_cache_key_view(cache), {1.0f, 2.0f, 3.0f, 4.0f}, 0.0f);
-    expect_float_values_near(qwen_attention_cache_value_view(cache), {5.0f, 6.0f, 7.0f, 8.0f}, 0.0f);
+    EXPECT_EQ(std::vector<std::size_t>({2}), cache.sequence_lengths);
+    EXPECT_EQ(Shape({1, 2, 1, 2}), cache.key.tensor_info().shape);
+    EXPECT_EQ(Shape({1, 2, 1, 2}), cache.value.tensor_info().shape);
+    expect_float_values_near(qwen_attention_cache_key_view(cache, 0), {1.0f, 2.0f, 3.0f, 4.0f}, 0.0f);
+    expect_float_values_near(qwen_attention_cache_value_view(cache, 0), {5.0f, 6.0f, 7.0f, 8.0f}, 0.0f);
 }
 
 TEST_F(QwenCacheTest, GivenFullFixedCache_WhenAppendingMoreTokens_ThenStorageGrowsAndPreservesPrefix) {
-    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 2, 1, 2);
-    const auto first_key = make_f32_tensor("first_key", {2, 1, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    const auto first_value = make_f32_tensor("first_value", {2, 1, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
-    const auto next_key = make_f32_tensor("next_key", {1, 1, 2}, {9.0f, 10.0f});
-    const auto next_value = make_f32_tensor("next_value", {1, 1, 2}, {11.0f, 12.0f});
+    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 1, 2, 1, 2);
+    const auto first_key = make_f32_tensor("first_key", {1, 2, 1, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    const auto first_value = make_f32_tensor("first_value", {1, 2, 1, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+    const auto next_key = make_f32_tensor("next_key", {1, 1, 1, 2}, {9.0f, 10.0f});
+    const auto next_value = make_f32_tensor("next_value", {1, 1, 1, 2}, {11.0f, 12.0f});
 
-    append_to_qwen_attention_cache(cache, first_key.view(), first_value.view());
-    append_to_qwen_attention_cache(cache, next_key.view(), next_value.view());
+    append_to_qwen_attention_cache(cache, first_key.view(), first_value.view(), std::vector<std::size_t>({2}));
+    append_to_qwen_attention_cache(cache, next_key.view(), next_value.view(), std::vector<std::size_t>({1}));
 
-    EXPECT_EQ(std::size_t{3}, cache.sequence_length);
-    EXPECT_EQ(Shape({4, 1, 2}), cache.key.tensor_info().shape);
-    EXPECT_EQ(Shape({4, 1, 2}), cache.value.tensor_info().shape);
-    expect_float_values_near(qwen_attention_cache_key_view(cache), {1.0f, 2.0f, 3.0f, 4.0f, 9.0f, 10.0f}, 0.0f);
-    expect_float_values_near(qwen_attention_cache_value_view(cache), {5.0f, 6.0f, 7.0f, 8.0f, 11.0f, 12.0f}, 0.0f);
+    EXPECT_EQ(std::vector<std::size_t>({3}), cache.sequence_lengths);
+    EXPECT_EQ(Shape({1, 4, 1, 2}), cache.key.tensor_info().shape);
+    EXPECT_EQ(Shape({1, 4, 1, 2}), cache.value.tensor_info().shape);
+    expect_float_values_near(qwen_attention_cache_key_view(cache, 0), {1.0f, 2.0f, 3.0f, 4.0f, 9.0f, 10.0f}, 0.0f);
+    expect_float_values_near(qwen_attention_cache_value_view(cache, 0), {5.0f, 6.0f, 7.0f, 8.0f, 11.0f, 12.0f}, 0.0f);
+}
+
+TEST_F(QwenCacheTest, GivenMixedLengthBatch_WhenAppendingSequence_ThenEachRowUsesItsOwnPrefixLength) {
+    auto cache = make_qwen_attention_cache("key_cache", "value_cache", DType::F32, 2, 2, 1, 2);
+    const auto key = make_f32_tensor("key", {2, 2, 1, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 10.0f, 11.0f, 12.0f, 13.0f});
+    const auto value = make_f32_tensor("value", {2, 2, 1, 2}, {5.0f, 6.0f, 7.0f, 8.0f, 14.0f, 15.0f, 16.0f, 17.0f});
+
+    append_to_qwen_attention_cache(cache, key.view(), value.view(), std::vector<std::size_t>({2, 1}));
+
+    EXPECT_EQ(std::vector<std::size_t>({2, 1}), cache.sequence_lengths);
+    expect_float_values_near(qwen_attention_cache_key_view(cache, 0), {1.0f, 2.0f, 3.0f, 4.0f}, 0.0f);
+    expect_float_values_near(qwen_attention_cache_value_view(cache, 0), {5.0f, 6.0f, 7.0f, 8.0f}, 0.0f);
+    expect_float_values_near(qwen_attention_cache_key_view(cache, 1), {10.0f, 11.0f}, 0.0f);
+    expect_float_values_near(qwen_attention_cache_value_view(cache, 1), {14.0f, 15.0f}, 0.0f);
 }
 
 } // namespace cppinf::tests
