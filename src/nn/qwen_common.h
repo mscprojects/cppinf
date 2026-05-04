@@ -8,7 +8,8 @@
 
 namespace cppinf::nn::detail {
 
-// Applies a transformer linear projection with weight layout [out_features, in_features] to rank-2 or rank-3 input.
+// Applies a transformer linear projection with weight layout [out_features, in_features] to rank-3 [batch, sequence,
+// hidden] input.
 tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight,
                                std::string_view result_name);
 

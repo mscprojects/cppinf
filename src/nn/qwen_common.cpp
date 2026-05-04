@@ -14,13 +14,13 @@ namespace cppinf::nn::detail {
 
 tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight,
                                std::string_view result_name) {
+    if (input.tensor_info().shape.rank() != 3) {
+        throw std::invalid_argument(fmt::format("{} requires rank-3 input.", result_name));
+    }
+
     // A transformer linear layer stores weights as [out_features, in_features], so transpose to multiply tokens
     // [..., in_features] by [in_features, out_features].
     const auto transposed_weight = ops::transpose_2d(weight);
-    if (input.tensor_info().shape.rank() == 2) {
-        return tensors::rename_tensor(result_name, ops::matmul(input, transposed_weight.view()));
-    }
-
     const auto& dims = input.tensor_info().shape.dims();
     const auto batch_size = common::checked_positive_dim_to_size(dims[0], fmt::format("{} batch size", result_name));
     const auto sequence_length =
