@@ -15,7 +15,9 @@
 
 #include <fmt/format.h>
 
+#include "common/checked.h"
 #include "nn/qwen_cache.h"
+#include "nn/qwen_common.h"
 #include "nn/rope.h"
 #include "ops/matmul.h"
 #include "ops/nn_ops.h"
@@ -30,30 +32,11 @@
 namespace cppinf::nn {
 namespace {
 
-std::size_t checked_non_negative_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    if (dim < 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-negative.", field_name));
-    }
-
-    return static_cast<std::size_t>(dim);
-}
-
-std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    const auto value = checked_non_negative_dim_to_size(dim, field_name);
-    if (value == 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-zero.", field_name));
-    }
-
-    return value;
-}
-
-std::int64_t checked_size_to_dim(std::size_t value, std::string_view field_name) {
-    if (value > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
-        throw std::overflow_error(fmt::format("{} does not fit in int64_t.", field_name));
-    }
-
-    return static_cast<std::int64_t>(value);
-}
+using common::checked_non_negative_dim_to_size;
+using common::checked_positive_dim_to_size;
+using common::checked_size_to_dim;
+using detail::linear_project;
+using detail::validate_projection_weight;
 
 void validate_sequence_lengths(std::span<const std::size_t> sequence_lengths, std::size_t batch_size,
                                std::size_t sequence_capacity, std::string_view op_name) {
@@ -67,28 +50,6 @@ void validate_sequence_lengths(std::span<const std::size_t> sequence_lengths, st
                 fmt::format("{} sequence length exceeds the padded sequence capacity.", op_name));
         }
     }
-}
-
-tensors::Tensor linear_project(const tensors::TensorView& input, const tensors::TensorView& weight,
-                               std::string_view result_name) {
-    // A transformer linear layer stores weights as [out_features, in_features], so transpose to multiply tokens
-    // [..., in_features] by [in_features, out_features].
-    const auto transposed_weight = ops::transpose_2d(weight);
-    if (input.tensor_info().shape.rank() == 2) {
-        return tensors::rename_tensor(result_name, ops::matmul(input, transposed_weight.view()));
-    }
-
-    const auto& dims = input.tensor_info().shape.dims();
-    const auto batch_size = checked_positive_dim_to_size(dims[0], fmt::format("{} batch size", result_name));
-    const auto sequence_length = checked_positive_dim_to_size(dims[1], fmt::format("{} sequence length", result_name));
-    const auto hidden_size = checked_positive_dim_to_size(dims[2], fmt::format("{} hidden size", result_name));
-    const auto flat_input = ops::reshape(input, tensors::Shape({static_cast<std::int64_t>(batch_size * sequence_length),
-                                                                static_cast<std::int64_t>(hidden_size)}));
-    auto projected = ops::matmul(flat_input, transposed_weight.view());
-    return tensors::materialize_tensor(
-        result_name, ops::reshape(projected.view(), tensors::Shape({static_cast<std::int64_t>(batch_size),
-                                                                    static_cast<std::int64_t>(sequence_length),
-                                                                    projected.tensor_info().shape.dims()[1]})));
 }
 
 tensors::TensorView reshape_heads(const tensors::TensorView& input, std::size_t head_count, std::size_t head_dim,
@@ -112,19 +73,6 @@ tensors::TensorView reshape_heads(const tensors::TensorView& input, std::size_t 
 
     return ops::reshape(input, tensors::Shape({dims[0], dims[1], static_cast<std::int64_t>(head_count),
                                                static_cast<std::int64_t>(head_dim)}));
-}
-
-void validate_projection_weight(const tensors::TensorView& weight, std::string_view name, std::size_t output_size,
-                                std::size_t input_size) {
-    if (weight.tensor_info().shape.rank() != 2) {
-        throw std::invalid_argument(fmt::format("{} must be rank-2.", name));
-    }
-
-    const auto& dims = weight.tensor_info().shape.dims();
-    if (checked_positive_dim_to_size(dims[0], fmt::format("{} rows", name)) != output_size ||
-        checked_positive_dim_to_size(dims[1], fmt::format("{} cols", name)) != input_size) {
-        throw std::invalid_argument(fmt::format("{} has an unexpected shape.", name));
-    }
 }
 
 void validate_norm_weight(const tensors::TensorView& weight, std::string_view name, std::size_t head_dim) {

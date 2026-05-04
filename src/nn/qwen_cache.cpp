@@ -10,6 +10,7 @@
 
 #include <fmt/format.h>
 
+#include "common/checked.h"
 #include "ops/tensor_ops.h"
 #include "tensors/shape.h"
 #include "tensors/tensor_info.h"
@@ -18,35 +19,12 @@
 namespace cppinf::nn {
 namespace {
 
-std::size_t checked_non_negative_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    if (dim < 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-negative.", field_name));
-    }
-
-    return static_cast<std::size_t>(dim);
-}
-
-std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    const auto value = checked_non_negative_dim_to_size(dim, field_name);
-    if (value == 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-zero.", field_name));
-    }
-
-    return value;
-}
-
-std::int64_t checked_size_to_dim(std::size_t value, std::string_view field_name) {
-    if (value > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
-        throw std::overflow_error(fmt::format("{} does not fit in int64_t.", field_name));
-    }
-
-    return static_cast<std::int64_t>(value);
-}
+using common::checked_positive_dim_to_size;
 
 std::size_t cache_row_byte_size(const std::vector<std::int64_t>& dims, tensors::DType dtype,
                                 std::string_view result_name) {
-    return checked_positive_dim_to_size(dims[2], fmt::format("{} heads", result_name)) *
-           checked_positive_dim_to_size(dims[3], fmt::format("{} head dim", result_name)) *
+    return common::checked_positive_dim_to_size(dims[2], fmt::format("{} heads", result_name)) *
+           common::checked_positive_dim_to_size(dims[3], fmt::format("{} head dim", result_name)) *
            tensors::element_size_bytes(dtype);
 }
 
@@ -110,7 +88,7 @@ std::size_t validate_cache_tensor(const tensors::Tensor& cache_tensor, const ten
 tensors::Tensor make_cache_tensor(const tensors::TensorView& current, std::size_t capacity,
                                   std::string_view result_name) {
     std::vector<std::int64_t> cache_dims = current.tensor_info().shape.dims();
-    cache_dims[1] = checked_size_to_dim(capacity, fmt::format("{} capacity", result_name));
+    cache_dims[1] = common::checked_size_to_dim(capacity, fmt::format("{} capacity", result_name));
     return tensors::Tensor::zeros(tensors::make_result_tensor_info(result_name, current.tensor_info().dtype,
                                                                    tensors::Shape(std::move(cache_dims))));
 }
@@ -222,10 +200,11 @@ QwenAttentionCache make_qwen_attention_cache(std::string_view key_name, std::str
         throw std::invalid_argument("Qwen attention cache requires non-zero dimensions.");
     }
 
-    const auto shape = tensors::Shape({checked_size_to_dim(batch_size, "qwen_attention_cache batch size"),
-                                       checked_size_to_dim(max_sequence_length, "qwen_attention_cache sequence"),
-                                       checked_size_to_dim(num_key_value_heads, "qwen_attention_cache kv heads"),
-                                       checked_size_to_dim(head_dim, "qwen_attention_cache head dim")});
+    const auto shape =
+        tensors::Shape({common::checked_size_to_dim(batch_size, "qwen_attention_cache batch size"),
+                        common::checked_size_to_dim(max_sequence_length, "qwen_attention_cache sequence"),
+                        common::checked_size_to_dim(num_key_value_heads, "qwen_attention_cache kv heads"),
+                        common::checked_size_to_dim(head_dim, "qwen_attention_cache head dim")});
     return QwenAttentionCache{
         .key = tensors::Tensor::zeros(tensors::make_result_tensor_info(key_name, dtype, shape)),
         .value = tensors::Tensor::zeros(tensors::make_result_tensor_info(value_name, dtype, shape)),

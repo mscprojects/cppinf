@@ -8,6 +8,7 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include "common/checked.h"
 #include "io/file.h"
 
 namespace cppinf::files {
@@ -20,14 +21,6 @@ struct ParsedSafetensorsHeader {
     std::vector<tensors::TensorInfo> tensor_infos;
     std::unordered_map<std::string, std::string> metadata;
 };
-
-std::size_t checked_to_size(std::uint64_t value, std::string_view field_name) {
-    if (value > std::numeric_limits<std::size_t>::max()) {
-        throw std::overflow_error(fmt::format("{} does not fit in size_t.", field_name));
-    }
-
-    return static_cast<std::size_t>(value);
-}
 
 std::uint64_t read_u64_le(std::span<const std::byte> bytes) {
     if (bytes.size() < sizeof(std::uint64_t)) {
@@ -99,7 +92,7 @@ std::unordered_map<std::string, std::string> parse_metadata(const json& value) {
 }
 
 ParsedSafetensorsHeader parse_header(std::span<const std::byte> file_bytes) {
-    const auto header_size = checked_to_size(read_u64_le(file_bytes), "header size");
+    const auto header_size = common::checked_u64_to_size(read_u64_le(file_bytes), "header size");
     const auto tensor_data_offset = sizeof(std::uint64_t) + header_size;
 
     if (tensor_data_offset > file_bytes.size()) {

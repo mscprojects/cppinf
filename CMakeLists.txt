@@ -112,6 +112,8 @@ if(TARGET dnnl)
 endif()
 
 set(CPPINF_SOURCES
+    src/common/checked.cpp
+    src/common/checked.h
     src/io/file.cpp
     src/io/file.h
     src/cli/cli_app.cpp
@@ -132,6 +134,8 @@ set(CPPINF_SOURCES
     src/nn/qwen_attention.h
     src/nn/qwen_cache.cpp
     src/nn/qwen_cache.h
+    src/nn/qwen_common.cpp
+    src/nn/qwen_common.h
     src/nn/qwen_mlp.cpp
     src/nn/qwen_mlp.h
     src/nn/rope.cpp

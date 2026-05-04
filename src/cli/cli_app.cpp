@@ -14,6 +14,7 @@
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
 
+#include "common/checked.h"
 #include "loaders/hf/hf_model_summary.h"
 #include "models/qwen3/qwen3_model.h"
 #include "ops/op_utils.h"
@@ -68,21 +69,14 @@ CliResult command_failure(std::string_view message) {
     };
 }
 
-std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view name) {
-    if (dim <= 0) {
-        throw std::invalid_argument(fmt::format("{} must be positive.", name));
-    }
-    return static_cast<std::size_t>(dim);
-}
-
 std::int64_t select_argmax_token_id(const tensors::Tensor& logits) {
     if (logits.tensor_info().shape.rank() != 2) {
         throw std::invalid_argument("CLI generation requires rank-2 logits.");
     }
 
     const auto& dims = logits.tensor_info().shape.dims();
-    const auto sequence_length = checked_positive_dim_to_size(dims[0], "logits sequence length");
-    const auto vocab_size = checked_positive_dim_to_size(dims[1], "logits vocab size");
+    const auto sequence_length = common::checked_positive_dim_to_size(dims[0], "logits sequence length");
+    const auto vocab_size = common::checked_positive_dim_to_size(dims[1], "logits vocab size");
     const auto last_row_offset = (sequence_length - 1) * vocab_size;
 
     std::int64_t best_token_id = 0;
@@ -115,8 +109,8 @@ std::int64_t sample_token_id(const tensors::Tensor& logits, float temperature, s
 
     // Only the final sequence row matters for autoregressive decoding, it predicts the next token distribution.
     const auto& dims = logits.tensor_info().shape.dims();
-    const auto sequence_length = checked_positive_dim_to_size(dims[0], "logits sequence length");
-    const auto vocab_size = checked_positive_dim_to_size(dims[1], "logits vocab size");
+    const auto sequence_length = common::checked_positive_dim_to_size(dims[0], "logits sequence length");
+    const auto vocab_size = common::checked_positive_dim_to_size(dims[1], "logits vocab size");
     const auto last_row_offset = (sequence_length - 1) * vocab_size;
 
     // Divide logits by temperature before softmax: lower temperatures sharpen probabilities, higher temperatures

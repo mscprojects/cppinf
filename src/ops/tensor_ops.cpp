@@ -11,40 +11,21 @@
 
 #include <fmt/format.h>
 
+#include "common/checked.h"
 #include "ops/one_dnn_utils.h"
 #include "ops/op_utils.h"
 
 namespace cppinf::ops {
 namespace {
 
-std::size_t checked_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    if (dim < 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-negative.", field_name));
-    }
-
-    return static_cast<std::size_t>(dim);
-}
-
-std::int64_t checked_size_to_dim(std::size_t value, std::string_view field_name) {
-    if (value > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
-        throw std::overflow_error(fmt::format("{} does not fit in int64_t.", field_name));
-    }
-
-    return static_cast<std::int64_t>(value);
-}
-
-std::size_t checked_positive_size(std::size_t value, std::string_view field_name) {
-    if (value == 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-zero.", field_name));
-    }
-
-    return value;
-}
+using common::checked_non_negative_dim_to_size;
+using common::checked_positive_size;
+using common::checked_size_to_dim;
 
 std::vector<std::size_t> coordinates_from_flat_index(std::size_t flat_index, const std::vector<std::int64_t>& dims) {
     std::vector<std::size_t> coordinates(dims.size(), 0);
     for (std::size_t axis = dims.size(); axis-- > 0;) {
-        const auto dim = checked_dim_to_size(dims[axis], "logical index dim");
+        const auto dim = checked_non_negative_dim_to_size(dims[axis], "logical index dim");
         if (dim == 0) {
             throw std::invalid_argument("Cannot index into a tensor with an empty dimension.");
         }
@@ -124,9 +105,9 @@ tensors::Tensor transpose_last_two_dims_impl(const tensors::TensorView& input, s
         return result;
     }
 
-    const auto batch_size = checked_dim_to_size(dims[0], "transpose_last_two_dims batch");
-    const auto rows = checked_dim_to_size(dims[1], "transpose_last_two_dims rows");
-    const auto cols = checked_dim_to_size(dims[2], "transpose_last_two_dims cols");
+    const auto batch_size = checked_non_negative_dim_to_size(dims[0], "transpose_last_two_dims batch");
+    const auto rows = checked_non_negative_dim_to_size(dims[1], "transpose_last_two_dims rows");
+    const auto cols = checked_non_negative_dim_to_size(dims[2], "transpose_last_two_dims cols");
     const dnnl::memory::dims transposed_dims = {
         static_cast<dnnl::memory::dim>(batch_size),
         static_cast<dnnl::memory::dim>(cols),
@@ -189,7 +170,7 @@ tensors::TensorView squeeze(const tensors::TensorView& input, std::size_t dim) {
     }
 
     const auto& dims = input.tensor_info().shape.dims();
-    if (checked_dim_to_size(dims[dim], "squeeze dim size") != 1) {
+    if (checked_non_negative_dim_to_size(dims[dim], "squeeze dim size") != 1) {
         throw std::invalid_argument("squeeze requires the selected dimension to have size 1.");
     }
 
@@ -237,7 +218,7 @@ tensors::TensorView narrow(const tensors::TensorView& input, std::size_t dim, st
     }
 
     const auto& dims = input.tensor_info().shape.dims();
-    const std::size_t dim_size = checked_dim_to_size(dims[dim], "narrow dim size");
+    const std::size_t dim_size = checked_non_negative_dim_to_size(dims[dim], "narrow dim size");
     if (start > dim_size || length > dim_size - start) {
         throw std::out_of_range("narrow range is out of bounds.");
     }
@@ -297,7 +278,7 @@ tensors::Tensor repeat_interleave(const tensors::TensorView& input, std::size_t 
 
     const auto& input_dims = input.tensor_info().shape.dims();
     std::vector<std::int64_t> output_dims = input_dims;
-    const auto repeated_dim_size = checked_dim_to_size(input_dims[dim], "repeat_interleave dim size");
+    const auto repeated_dim_size = checked_non_negative_dim_to_size(input_dims[dim], "repeat_interleave dim size");
     if (repeated_dim_size > std::numeric_limits<std::size_t>::max() / repeats) {
         throw std::overflow_error("repeat_interleave output dimension overflowed.");
     }

@@ -11,6 +11,7 @@
 
 #include <fmt/format.h>
 
+#include "common/checked.h"
 #include "ops/one_dnn_utils.h"
 #include "ops/op_utils.h"
 #include "ops/tensor_ops.h"
@@ -26,21 +27,14 @@ tensors::Tensor make_f32_tensor(std::string_view name, const tensors::Shape& sha
     return tensor;
 }
 
-std::size_t checked_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    if (dim < 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-negative.", field_name));
-    }
-
-    return static_cast<std::size_t>(dim);
-}
-
 void validate_last_dim_operation_input(const tensors::TensorView& input, std::string_view op_name) {
     detail::validate_supported_float_dtype(input.tensor_info().dtype, op_name);
     if (input.tensor_info().shape.rank() == 0) {
         throw std::invalid_argument(fmt::format("{} requires a tensor with rank at least 1.", op_name));
     }
 
-    if (checked_dim_to_size(input.tensor_info().shape.dims().back(), fmt::format("{} last dim", op_name)) == 0) {
+    if (common::checked_non_negative_dim_to_size(input.tensor_info().shape.dims().back(),
+                                                 fmt::format("{} last dim", op_name)) == 0) {
         throw std::invalid_argument(fmt::format("{} requires a non-empty last dimension.", op_name));
     }
 }
@@ -91,8 +85,10 @@ tensors::Tensor scaled_causal_softmax_last_dim(const tensors::TensorView& input,
     }
 
     const auto& dims = input.tensor_info().shape.dims();
-    const auto query_length = checked_dim_to_size(dims[dims.size() - 2], "scaled_causal_softmax_last_dim query length");
-    const auto key_length = checked_dim_to_size(dims[dims.size() - 1], "scaled_causal_softmax_last_dim key length");
+    const auto query_length =
+        common::checked_non_negative_dim_to_size(dims[dims.size() - 2], "scaled_causal_softmax_last_dim query length");
+    const auto key_length =
+        common::checked_non_negative_dim_to_size(dims[dims.size() - 1], "scaled_causal_softmax_last_dim key length");
     if (query_length == 0 || key_length == 0) {
         throw std::invalid_argument("scaled_causal_softmax_last_dim requires non-empty attention dimensions.");
     }
@@ -155,8 +151,10 @@ tensors::Tensor rms_norm(const tensors::TensorView& input, const tensors::Tensor
         throw std::invalid_argument("rms_norm requires a rank-1 weight tensor.");
     }
 
-    const auto last_dim = checked_dim_to_size(input.tensor_info().shape.dims().back(), "rms_norm last dim");
-    if (checked_dim_to_size(weight.tensor_info().shape.dims()[0], "rms_norm weight size") != last_dim) {
+    const auto last_dim =
+        common::checked_non_negative_dim_to_size(input.tensor_info().shape.dims().back(), "rms_norm last dim");
+    if (common::checked_non_negative_dim_to_size(weight.tensor_info().shape.dims()[0], "rms_norm weight size") !=
+        last_dim) {
         throw std::invalid_argument("rms_norm weight size must match the input last dimension.");
     }
 

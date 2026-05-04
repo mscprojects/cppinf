@@ -11,6 +11,7 @@
 
 #include <fmt/format.h>
 
+#include "common/checked.h"
 #include "ops/one_dnn_utils.h"
 #include "ops/op_utils.h"
 #include "ops/tensor_ops.h"
@@ -21,19 +22,6 @@
 
 namespace cppinf::nn {
 namespace {
-
-std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    if (dim < 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-negative.", field_name));
-    }
-
-    const auto value = static_cast<std::size_t>(dim);
-    if (value == 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-zero.", field_name));
-    }
-
-    return value;
-}
 
 std::size_t flat_index_rank3(std::size_t dim0, std::size_t dim1, std::size_t dim2,
                              const std::vector<std::int64_t>& dims) {
@@ -57,9 +45,9 @@ void validate_rope_input(const tensors::TensorView& input, float rope_base, std:
     }
 
     const auto& dims = input.tensor_info().shape.dims();
-    checked_positive_dim_to_size(dims[0], "rope dim 0");
-    checked_positive_dim_to_size(dims[1], "rope dim 1");
-    const auto head_size = checked_positive_dim_to_size(dims[2], "rope head size");
+    common::checked_positive_dim_to_size(dims[0], "rope dim 0");
+    common::checked_positive_dim_to_size(dims[1], "rope dim 1");
+    const auto head_size = common::checked_positive_dim_to_size(dims[2], "rope head size");
     if (head_size % 2 != 0) {
         throw std::invalid_argument("apply_rope requires an even head size.");
     }
