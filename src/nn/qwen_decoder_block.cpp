@@ -8,6 +8,7 @@
 
 #include <fmt/format.h>
 
+#include "common/checked.h"
 #include "ops/elementwise_ops.h"
 #include "ops/nn_ops.h"
 #include "ops/op_utils.h"
@@ -19,25 +20,12 @@
 namespace cppinf::nn {
 namespace {
 
-std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    if (dim < 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-negative.", field_name));
-    }
-
-    const auto value = static_cast<std::size_t>(dim);
-    if (value == 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-zero.", field_name));
-    }
-
-    return value;
-}
-
 void validate_norm_weight(const tensors::TensorView& weight, std::string_view name, std::size_t hidden_size) {
     if (weight.tensor_info().shape.rank() != 1) {
         throw std::invalid_argument(fmt::format("{} must be rank-1.", name));
     }
 
-    if (checked_positive_dim_to_size(weight.tensor_info().shape.dims()[0], fmt::format("{} size", name)) !=
+    if (common::checked_positive_dim_to_size(weight.tensor_info().shape.dims()[0], fmt::format("{} size", name)) !=
         hidden_size) {
         throw std::invalid_argument(fmt::format("{} must match hidden size.", name));
     }
@@ -66,9 +54,9 @@ void validate_qwen_decoder_block_inputs(const tensors::TensorView& hidden_states
 
     const auto& hidden_dims = hidden_states.tensor_info().shape.dims();
     for (std::size_t axis = 0; axis + 1 < hidden_dims.size(); ++axis) {
-        checked_positive_dim_to_size(hidden_dims[axis], fmt::format("qwen_decoder_block dim {}", axis));
+        common::checked_positive_dim_to_size(hidden_dims[axis], fmt::format("qwen_decoder_block dim {}", axis));
     }
-    const auto hidden_size = checked_positive_dim_to_size(hidden_dims.back(), "qwen_decoder_block hidden size");
+    const auto hidden_size = common::checked_positive_dim_to_size(hidden_dims.back(), "qwen_decoder_block hidden size");
     validate_norm_weight(weights.input_layernorm_weight, "qwen_decoder_block input_layernorm_weight", hidden_size);
     validate_norm_weight(weights.post_attention_layernorm_weight, "qwen_decoder_block post_attention_layernorm_weight",
                          hidden_size);

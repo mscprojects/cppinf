@@ -13,6 +13,7 @@
 
 #include <fmt/format.h>
 
+#include "common/checked.h"
 #include "loaders/hf/hf_model_files.h"
 #include "nn/qwen_decoder_block.h"
 #include "ops/matmul.h"
@@ -33,26 +34,8 @@ struct PackedTokenBatch {
     std::size_t max_sequence_length{};
 };
 
-std::size_t checked_positive_dim_to_size(std::int64_t dim, std::string_view field_name) {
-    if (dim < 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-negative.", field_name));
-    }
-
-    const auto value = static_cast<std::size_t>(dim);
-    if (value == 0) {
-        throw std::invalid_argument(fmt::format("{} must be non-zero.", field_name));
-    }
-
-    return value;
-}
-
-std::int64_t checked_size_to_dim(std::size_t value, std::string_view field_name) {
-    if (value > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
-        throw std::overflow_error(fmt::format("{} does not fit in int64_t.", field_name));
-    }
-
-    return static_cast<std::int64_t>(value);
-}
+using common::checked_positive_dim_to_size;
+using common::checked_size_to_dim;
 
 std::string layer_tensor_name(std::size_t layer_index, std::string_view suffix) {
     return fmt::format("model.layers.{}.{}", layer_index, suffix);
