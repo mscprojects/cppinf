@@ -282,8 +282,8 @@ tensors::Tensor Qwen3Model::forward_cached(const TokenIdBatch& token_ids, Qwen3C
     }
 
     // Look up one learned embedding vector per valid token id, turning token ids [batch, seq] into hidden states
-    // [batch, seq, hidden]. Right-padded positions stay zero so the batch-size-1 path and padded batch path share the
-    // same batched execution contract.
+    // [batch, seq, hidden]. Right-padded positions stay zero so single-row and multi-row batches share the same
+    // batched execution contract.
     auto hidden_states = embedding_lookup(weights_.tensor_view("model.embed_tokens.weight"), packed_batch);
 
     // Run the transformer stack one decoder block at a time. Each block keeps the outer shape [batch, seq, hidden],

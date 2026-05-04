@@ -26,7 +26,8 @@ class Qwen3Model {
     static Qwen3Model from_dir(const std::filesystem::path& model_dir);
 
     // Runs token ids through the full Qwen3 model and returns rank-2 [sequence, vocab] logits.
-    // Requires tied word embeddings and uses a temporary empty cache. Output dtype matches the loaded checkpoint dtype.
+    // Requires tied word embeddings, uses the same batched cached path as other entry points, and keeps checkpoint
+    // dtype.
     tensors::Tensor forward(std::span<const std::int64_t> token_ids) const;
 
     // Runs a right-padded batch of token-id sequences through the full Qwen3 model and returns rank-3

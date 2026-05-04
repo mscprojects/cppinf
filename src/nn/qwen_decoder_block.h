@@ -17,16 +17,8 @@ struct QwenDecoderBlockWeights {
     QwenMlpWeights mlp;
 };
 
-// Applies one Qwen decoder block to rank-3 [batch, sequence, hidden] hidden states.
-// sequence_lengths mark the valid prefix length for each batch row and padded positions remain inert.
-tensors::Tensor qwen_decoder_block(const tensors::TensorView& hidden_states,
-                                   std::span<const std::size_t> sequence_lengths,
-                                   const QwenDecoderBlockWeights& weights, std::size_t num_attention_heads,
-                                   std::size_t num_key_value_heads, std::size_t head_dim, float norm_epsilon,
-                                   float rope_base = 1000000.0f);
-
-// Applies one cached Qwen decoder block to rank-3 [batch, sequence, hidden] hidden states.
-// sequence_lengths describe the valid uncached suffix in this call for each batch row.
+// Applies one Qwen decoder block to rank-3 [batch, sequence, hidden] hidden states while appending K/V tensors to
+// cache. sequence_lengths describe the valid suffix in this call for each batch row.
 tensors::Tensor qwen_decoder_block_with_cache(const tensors::TensorView& hidden_states,
                                               std::span<const std::size_t> sequence_lengths,
                                               const QwenDecoderBlockWeights& weights, QwenDecoderBlockCache& cache,
